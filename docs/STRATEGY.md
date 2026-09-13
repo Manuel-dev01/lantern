@@ -331,8 +331,22 @@ Three consequences:
    `vertex_colored` mesh and use it for both collision and depth occlusion still holds —
    but the asset is free with the world rather than a second paid export.
 3. **Three LoDs arrive at no extra cost**, which is most of the Phase 4 mobile performance
-   story handed over for free. `full_res` measured **>16 MB** for a draft world, so
-   `100k` / `500k` are the realistic choices for phones. Budget a real decision here.
+   story handed over for free.
+
+Measured on the first draft world (`35b95a56`):
+
+| Asset | Size | Note |
+|---|---|---|
+| `splat.spz` @ `100k` | **986 KB** | Ships the whole visible world. Use this on mobile. |
+| `splat.spz` @ `full_res` | **>17 MB** | Abandoned mid-download; desktop-only at best. |
+| `collider.glb` | **8.4 MB** | ⚠️ Heavier than the world it collides with. |
+| `thumbnail.webp` | 25 KB | Free share-card image. |
+
+⚠️ **The collider is the performance problem, not the splats.** At 8.4 MB it is more than
+eight times the 100k splat, and the recipient cannot walk or see correct occlusion until it
+loads. Options for Phase 1: decimate it offline, load it after first paint so the world is
+visible while collision is still arriving, or test whether a lower-res mesh export is small
+enough to be worth the extra credits. Do not ship it as-is on cellular.
 
 `hq_mesh_url` and `full_res_mesh_url` are null on draft worlds — that is what the export
 endpoint is for, and what STRATEGY's ~1hr high-quality mesh export note refers to.
@@ -353,6 +367,8 @@ endpoint is for, and what STRATEGY's ~1hr high-quality mesh export note refers t
 ### Scripts
 
 `npm run world:probe` / `object:probe` validate each key without spending anything;
-`world:generate` and `object:generate` do the work. Both generators mirror every asset to
+`world:generate` and `object:generate` do the work. Downloads dominate the wall clock on a
+slow connection — the 8.4 MB collider took 12m33s against 36s for the splat — so generation
+time and mirroring time are separate budgets. Both generators mirror every asset to
 `public/` before anything reaches the browser, and `world:generate --world-id <id>` resumes
 against an already-generated world so a failed download never costs a second generation.
