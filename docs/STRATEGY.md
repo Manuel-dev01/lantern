@@ -271,12 +271,9 @@ Gathered before kickoff so Phase 1 starts with zero unknowns.
 - Export body: `asset_type` `"splats"|"mesh"` · `format` `"ply"|"glb"` · `resolution` `"full_res"|"500k"|"150k"|"100k"` · `mesh_variant` `"textured"|"vertex_colored"`
 - Download URLs carry an `expires_at` — **mirror every asset to our own blob storage on receipt.**
 
-**🔧 Correction to Phase 1.** The *API* exports **PLY splats** and **GLB mesh** — not `.spz`, and there is no separately named "collider mesh" endpoint. Those are Marble *app* features. Revised approach:
-
-- **Visuals:** export `splats` / `ply`. Spark.js reads PLY natively, so nothing is lost.
-- **Collision + occlusion:** export `mesh` / `glb` at **`resolution: "100k"`, `mesh_variant: "vertex_colored"`**. Use this single cheap asset twice — as the physics collider for first-person walking, *and* rendered invisibly as a depth-only pass so Tripo GLBs occlude correctly against the splats.
-
-That last point is the whole hybrid-rendering trick, and it's now a known quantity rather than a research risk. Two exports per world; budget the extra credits.
+**🔧 Correction, superseded — see "Phase 0 executed" below.** An earlier reading of the
+docs concluded the API emits only PLY and has no collider endpoint. Running it proved
+otherwise. The export endpoint is real but is *not* the normal path.
 
 ### Tripo v3 (JS/TS SDK)
 
@@ -292,3 +289,70 @@ That last point is the whole hybrid-rendering trick, and it's now a known quanti
 - Errors: `TripoAPIError`, `TripoTaskError`, `TripoTimeoutError`
 
 **Architectural consequence:** both APIs are async-job + expiring-URL, so the backend needs a **persist-on-completion worker** from day one — poll, download, re-upload to our own storage, then store our URL. Building this in Phase 1 rather than retrofitting it in Phase 2 avoids a rewrite.
+
+---
+
+## Phase 0 executed — what the APIs actually returned (Sep 13)
+
+Everything above this section was researched from documentation. Everything below was
+observed from live responses. Where they disagree, this section wins.
+
+### World Labs — confirmed
+
+- Base URL, `WLT-Api-Key` header and all four endpoint paths are correct as documented.
+- `POST /marble/v1/worlds:generate` returns an operation. Poll `GET /marble/v1/operations/{id}`;
+  `metadata` carries `{ status: "IN_PROGRESS", description }` while it runs.
+- **A `marble-1.0-draft` world completed in 27 seconds**, not the ~5 minutes budgeted.
+  This materially changes Phase 2: the "make the wait part of the ritual" screen may be
+  solving a problem that does not exist at draft quality. Re-time it against `marble-1.1`
+  before designing around it.
+
+### World Labs — corrected
+
+**The generate response already contains finished, downloadable assets. No export call is
+needed for the normal path.** `response.assets` carries:
+
+```
+assets.splats.spz_urls    { "100k": url, "500k": url, "full_res": url }
+assets.mesh.collider_mesh_url   a GLB collider
+assets.mesh.hq_mesh_url         null on draft worlds
+assets.mesh.full_res_mesh_url   null on draft worlds
+assets.thumbnail_url            a .webp preview
+assets.caption                  a model-written description of the world
+```
+
+Three consequences:
+
+1. **`.spz` is available directly** — the native, compressed format Spark prefers. The
+   earlier "export PLY instead" workaround is unnecessary. For comparison, the PLY export
+   of this same draft world was still streaming past 5 MB when it was abandoned; the
+   `.spz` is one file and three LoDs come free.
+2. **A collider mesh ships with every world**, named as such. The plan to export a 100k
+   `vertex_colored` mesh and use it for both collision and depth occlusion still holds —
+   but the asset is free with the world rather than a second paid export.
+3. **Three LoDs arrive at no extra cost**, which is most of the Phase 4 mobile performance
+   story handed over for free. `full_res` measured **>16 MB** for a draft world, so
+   `100k` / `500k` are the realistic choices for phones. Budget a real decision here.
+
+`hq_mesh_url` and `full_res_mesh_url` are null on draft worlds — that is what the export
+endpoint is for, and what STRATEGY's ~1hr high-quality mesh export note refers to.
+
+### Tripo — corrected
+
+- **`@vastai/tripo-sdk@0.1.1` defaults to the wrong host.** Its `DEFAULT_BASE_URL` is
+  `https://openapi.tripo3d.com/v3`, which answers **401 "Invalid API key"** for a key that
+  is valid. `https://openapi.tripo3d.ai/v3` — the host recorded above — returns 200.
+  Always pass `baseUrl` explicitly; `scripts/lib/tripo.mts` does.
+- Auth is `Authorization: Bearer <key>`, and `GET /account/balance` is a free key probe.
+- SDK surface otherwise matches: `smart_low_poly`, `ModelVersion.P1`, `waitForTask`,
+  and a `downloadModel(task)` helper that solves the 5-minute `model_url` expiry directly.
+- ⚠️ **The account has 0 credits.** The key authenticates but every generation call will
+  fail until the free tier is claimed or credits are purchased at platform.tripo3d.ai.
+  This is the one open blocker from Phase 0.
+
+### Scripts
+
+`npm run world:probe` / `object:probe` validate each key without spending anything;
+`world:generate` and `object:generate` do the work. Both generators mirror every asset to
+`public/` before anything reaches the browser, and `world:generate --world-id <id>` resumes
+against an already-generated world so a failed download never costs a second generation.

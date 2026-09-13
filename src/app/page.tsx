@@ -1,25 +1,21 @@
-"use client";
-
-import dynamic from "next/dynamic";
+import WorldStage from "@/components/WorldStage";
+import { loadLatestWorld } from "@/lib/worlds";
 import type { World } from "@/lib/types";
 
-// WebGL + Spark touch browser globals, so keep this out of the server render.
-const WorldViewer = dynamic(() => import("@/components/WorldViewer"), {
-  ssr: false,
-});
-
-// Phase 1 spike: a public Spark sample stands in until the first Marble
-// export lands. Swapping in a real world is a change to this object only.
+// Until the first Marble export lands, a public Spark sample stands in so the
+// app never renders an empty canvas.
 const SPIKE_WORLD: World = {
   id: "spike",
   splatUrl: "https://sparkjs.dev/assets/splats/butterfly.spz",
   spawn: [0, 1.6, 3],
 };
 
-export default function Home() {
+export default async function Home() {
+  const world = (await loadLatestWorld()) ?? SPIKE_WORLD;
+
   return (
     <main className="h-dvh w-dvw bg-[#05060a]">
-      <WorldViewer world={SPIKE_WORLD} />
+      <WorldStage world={world} />
     </main>
   );
 }

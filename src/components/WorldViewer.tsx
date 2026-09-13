@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
-import { SparkRenderer, SplatMesh } from "@sparkjsdev/spark";
+import { SparkRenderer, SplatMesh, SplatFileType } from "@sparkjsdev/spark";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { World } from "@/lib/types";
@@ -12,6 +12,7 @@ type Status = "loading" | "ready" | "error";
 export default function WorldViewer({ world }: { world: World }) {
   const mountRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<Status>("loading");
+  const [progress, setProgress] = useState<number | null>(null);
   const [message, setMessage] = useState<string>("");
 
   useEffect(() => {
@@ -19,6 +20,13 @@ export default function WorldViewer({ world }: { world: World }) {
     if (!mount) return;
 
     let disposed = false;
+
+    // Renders the collider mesh visibly instead of depth-only, to check that
+    // Marble's mesh export and splat export actually share a coordinate frame.
+    // A mismatch produces no error at all - objects just occlude against
+    // nothing, or vanish in midair - so it needs to be directly observable.
+    const debugCollider =
+      new URLSearchParams(window.location.search).get("debug") === "collider";
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x05060a);
@@ -29,7 +37,7 @@ export default function WorldViewer({ world }: { world: World }) {
       0.01,
       1000,
     );
-    camera.position.set(0, 1.6, 3);
+    camera.position.fromArray(world.spawn ?? [0, 1.6, 3]);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -49,7 +57,17 @@ export default function WorldViewer({ world }: { world: World }) {
     key.position.set(3, 6, 4);
     scene.add(key);
 
-    const splat = new SplatMesh({ url: world.splatUrl });
+    // A Marble PLY is far heavier than the .spz samples, so the load is long
+    // enough that a static string reads as a hang. Show real progress.
+    const isPly = world.splatUrl.toLowerCase().endsWith(".ply");
+    const splat = new SplatMesh({
+      url: world.splatUrl,
+      fileType: isPly ? SplatFileType.PLY : undefined,
+      onProgress: (event: ProgressEvent) => {
+        if (disposed || !event.lengthComputable || !event.total) return;
+        setProgress(Math.round((event.loaded / event.total) * 100));
+      },
+    });
     // Marble/Spark splats arrive Y-down relative to three's convention.
     splat.quaternion.set(1, 0, 0, 0);
     scene.add(splat);
@@ -73,10 +91,17 @@ export default function WorldViewer({ world }: { world: World }) {
         gltf.scene.traverse((obj) => {
           if ((obj as THREE.Mesh).isMesh) {
             const mesh = obj as THREE.Mesh;
-            mesh.material = new THREE.MeshBasicMaterial({
-              colorWrite: false,
-              depthWrite: true,
-            });
+            mesh.material = debugCollider
+              ? new THREE.MeshBasicMaterial({
+                  color: 0x00ff88,
+                  wireframe: true,
+                  transparent: true,
+                  opacity: 0.4,
+                })
+              : new THREE.MeshBasicMaterial({
+                  colorWrite: false,
+                  depthWrite: true,
+                });
             mesh.renderOrder = -1;
           }
         });
@@ -131,7 +156,9 @@ export default function WorldViewer({ world }: { world: World }) {
         <div className="pointer-events-none absolute inset-0 grid place-items-center">
           <p className="text-sm tracking-wide text-white/70">
             {status === "loading"
-              ? "opening the world…"
+              ? progress === null
+                ? "opening the world…"
+                : `opening the world… ${progress}%`
               : `could not open this world — ${message}`}
           </p>
         </div>

@@ -39,3 +39,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# generated worlds and objects (large binaries, mirrored from expiring provider URLs)
+/public/worlds/
+/public/objects/
+
+# transient generation logs
+scripts/*.log
+scripts/.last-*.log
