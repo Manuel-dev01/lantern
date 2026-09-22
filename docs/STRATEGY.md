@@ -405,3 +405,23 @@ LANTERN_BASE_URL=http://localhost:3007 npm run shot
 
 No browser download, and no asking someone to look at a screen to find out that the camera
 is in the wrong place.
+
+---
+
+## Hacker resources — decided (Sep 22)
+
+The organisers offer four resource pools. Two apply to us.
+
+| Resource | Verdict | Why |
+|---|---|---|
+| **Tripo — 25,000 credits** | **Apply, API not Studio** | ~$250 at 1cr = $0.01, roughly 100 gifts of objects. **Unblocks the current blocker**: the account is at 0 credits, so no object can be generated at all. |
+| **World Labs — 35,000 API credits** | **Apply, API not Pro** | ~$28 at $1 = 1,250cr → ~22 full `marble-1.1` worlds or 140+ drafts. Limited and first-come-first-served, so apply immediately. Pro is web-only and app credits do not work with the API — worth taking as the manual-export fallback, not as a substitute. |
+| TapNow — 10,000 Tapies | Skip | Deadline was Sep 18; it has passed. Not in our stack either. |
+| Jupiter SR — 3D hardware | **Ineligible** | Requires the Jupiter SR tool track, a **team** (individuals explicitly excluded), and **in-person attendance at an offline Demo Day**. We are solo and online-only. |
+
+**This answers Phase 0 step 4.** The "Jupiter" tool track is glasses-free 3D hardware, and it
+is closed to us on all three eligibility criteria. There is no third $800 tool award available:
+**the stackable ceiling stays $7,400 + Mac mini**, and the entry stays App + Tripo + World Labs.
+
+Confirmed key dates: submission Sep 15 – Oct 5, jury review Oct 5 – 25, winners Oct 25. These
+match the roadmap above, so the Oct 3 freeze and Oct 4 submission hold.
