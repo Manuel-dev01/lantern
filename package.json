@@ -10,7 +10,8 @@
     "world:probe": "node --env-file=.env scripts/probe-worldlabs.mts",
     "world:generate": "node --env-file=.env scripts/generate-world.mts",
     "object:generate": "node --env-file=.env scripts/generate-object.mts",
-    "object:probe": "node --env-file=.env scripts/probe-tripo.mts"
+    "object:probe": "node --env-file=.env scripts/probe-tripo.mts",
+    "shot": "node scripts/shot.mjs"
   },
   "dependencies": {
     "@sparkjsdev/spark": "^2.2.0",

@@ -16,8 +16,11 @@
  * `--world-id` to pick up where it stopped.
  */
 
+import { join } from "node:path";
+
 import type { World } from "../src/lib/types.ts";
-import { formatBytes, saveAsset, writeJson } from "./lib/storage.mts";
+import { readGlbBounds, spawnFromBounds } from "./lib/glb.mts";
+import { existingAsset, formatBytes, REPO_ROOT, saveAsset, writeJson } from "./lib/storage.mts";
 import {
   elapsed,
   generateWorld,
@@ -134,9 +137,18 @@ if (assets.thumbnail_url) {
 
 const saved: Record<string, string> = {};
 
+const force = process.argv.includes("--force");
+
 for (const item of downloads) {
   const started = Date.now();
   try {
+    const cached = force ? null : await existingAsset(dir, item.filename);
+    if (cached) {
+      saved[item.name] = cached.publicUrl;
+      timings.push({ stage: item.name, detail: `cached — ${formatBytes(cached.bytes)}` });
+      console.log(`  ${item.name}: already mirrored (${formatBytes(cached.bytes)}) — pass --force to refetch`);
+      continue;
+    }
     const asset = await saveAsset(dir, item.filename, item.url);
     saved[item.name] = asset.publicUrl;
     timings.push({
@@ -156,11 +168,34 @@ for (const item of downloads) {
 // ─── world.json ─────────────────────────────────────────────────────────────
 
 if (saved.splat) {
+  // The camera has to be placed from the world's real bounds. A hardcoded
+  // spawn put the first world's camera above its ceiling and outside its back
+  // wall, because Marble worlds are neither origin-centred nor metric.
+  const colliderPath = saved.collider
+    ? join(REPO_ROOT, "public", saved.collider.replace(/^\//, ""))
+    : null;
+  const bounds = colliderPath ? await readGlbBounds(colliderPath) : null;
+
+  if (bounds) {
+    const f = (v: number[]) => v.map((n) => n.toFixed(2)).join(", ");
+    console.log(`\n  bounds: [${f(bounds.min)}] .. [${f(bounds.max)}]`);
+    console.log(`  size:   [${f(bounds.size)}]  ${bounds.triangles.toLocaleString()} triangles`);
+  } else {
+    console.warn("\n  No collider bounds — falling back to a guessed camera position.");
+  }
+
+  const placement = bounds
+    ? spawnFromBounds(bounds)
+    : { spawn: [0, 1.6, 3] as [number, number, number], target: [0, 1, 0] as [number, number, number] };
+  console.log(`  spawn:  [${placement.spawn.map((n) => n.toFixed(2)).join(", ")}]`);
+
   const record: World = {
     id: worldId,
     splatUrl: saved.splat,
     colliderUrl: saved.collider,
-    spawn: [0, 1.6, 3],
+    spawn: placement.spawn,
+    target: placement.target,
+    bounds: bounds ? { min: bounds.min, max: bounds.max } : undefined,
     objects: [],
     caption: assets.caption ?? undefined,
     thumbnailUrl: saved.thumbnail,

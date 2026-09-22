@@ -372,3 +372,36 @@ slow connection — the 8.4 MB collider took 12m33s against 36s for the splat �
 time and mirroring time are separate budgets. Both generators mirror every asset to
 `public/` before anything reaches the browser, and `world:generate --world-id <id>` resumes
 against an already-generated world so a failed download never costs a second generation.
+
+### Coordinate frames — resolved (the risk that decided the spike)
+
+**Marble's collider mesh and its `.spz` splats share a coordinate frame.** Verified visually
+with `?debug=collider`: the wireframe tracks the ceiling, walls, curtain, window and door
+frame onto the splats exactly. Depth-only occlusion and BVH collision can both rely on it.
+This was the one unknown that could not be settled from documentation, and it is now settled.
+
+Two things had to be right for that to be visible:
+
+- **The splat needs a 180° flip about X; the collider does not.** Marble splats arrive Y-down,
+  the collider GLB is Y-up. The existing `splat.quaternion.set(1, 0, 0, 0)` is what brings them
+  into agreement — it is load-bearing, not leftover from the Spark sample.
+- **Nothing about the camera can be hardcoded.** Marble worlds are neither origin-centred nor
+  metric: the first room measured **2.63 × 1.47 × 3.57 units**, so the inherited
+  `spawn: [0, 1.6, 3]` put the camera above the ceiling and outside the back wall — which
+  renders as a small distant box and looks like a broken splat. `scripts/lib/glb.mts` now reads
+  the collider's bounds at generation time and derives spawn and orbit target from them, so
+  every future world places its own camera.
+
+### Verifying without a human
+
+`npm run shot` drives the installed Chrome headless with SwiftShader and writes a PNG, so
+orientation, framing and occlusion can be checked directly:
+
+```
+npm run shot                                    # the world
+npm run shot -- "/?debug=collider" shots/c.png  # collider alignment
+LANTERN_BASE_URL=http://localhost:3007 npm run shot
+```
+
+No browser download, and no asking someone to look at a screen to find out that the camera
+is in the wrong place.

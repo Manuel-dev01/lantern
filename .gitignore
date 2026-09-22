@@ -47,3 +47,6 @@ next-env.d.ts
 # transient generation logs
 scripts/*.log
 scripts/.last-*.log
+
+# local screenshots
+/shots/

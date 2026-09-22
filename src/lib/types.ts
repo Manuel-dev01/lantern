@@ -32,7 +32,19 @@ export interface World {
    * visibly - used for collision and for the depth-only occlusion pass.
    */
   colliderUrl?: string;
+  /** Where the camera starts, in world units. Derived from the collider bounds. */
   spawn?: [number, number, number];
+  /** What the camera initially looks at. */
+  target?: [number, number, number];
+  /**
+   * The collider's bounding box, in world units.
+   *
+   * Marble worlds are not centred on the origin and are not in metres - the
+   * first generated room measured 2.63 x 1.47 x 3.57 - so nothing about the
+   * camera, gravity or walk speed can be hardcoded. Read from the collider GLB
+   * at generation time.
+   */
+  bounds?: { min: [number, number, number]; max: [number, number, number] };
   objects?: GiftObject[];
   fromName?: string;
   toName?: string;

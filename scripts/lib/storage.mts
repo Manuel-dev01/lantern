@@ -114,3 +114,21 @@ export function formatBytes(bytes: number): string {
   }
   return `${value.toFixed(1)} ${units[unit]}`;
 }
+
+/**
+ * An already-mirrored asset, if it is present and non-empty.
+ *
+ * Re-running a world is normally about fixing metadata, not re-fetching bytes:
+ * the collider alone took 12 minutes on a slow connection. Skipping what is
+ * already on disk makes `--world-id` resumes nearly instant.
+ */
+export async function existingAsset(dir: string, filename: string): Promise<SavedAsset | null> {
+  try {
+    const path = join(PUBLIC_DIR, dir, filename);
+    const { size } = await stat(path);
+    if (!size) return null;
+    return { publicUrl: `/${dir}/${filename}`, path, bytes: size, ms: 0 };
+  } catch {
+    return null;
+  }
+}

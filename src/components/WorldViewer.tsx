@@ -50,7 +50,9 @@ export default function WorldViewer({ world }: { world: World }) {
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
-    controls.target.set(0, 1, 0);
+    // Look at the middle of the world, not a fixed point. Marble worlds are
+    // not origin-centred, so a hardcoded target aims at empty space.
+    controls.target.fromArray(world.target ?? [0, 1, 0]);
 
     scene.add(new THREE.AmbientLight(0xffffff, 0.8));
     const key = new THREE.DirectionalLight(0xffffff, 1.2);
