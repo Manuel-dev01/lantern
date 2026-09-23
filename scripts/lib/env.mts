@@ -6,13 +6,15 @@
  * request and puzzling over a 401.
  */
 
-export function requireEnv(name: string): string {
+export function requireEnv(name: string, hint?: string): string {
   const value = process.env[name];
   if (!value || !value.trim()) {
+    const where =
+      hint ??
+      `Add it to .env in the project root, then re-run. Scripts are launched ` +
+        `with \`node --env-file=.env\`.`;
     throw new Error(
-      `Missing ${name}. Add it to .env in the project root, then re-run.\n` +
-        `Scripts are launched with \`node --env-file=.env\`, so a value that ` +
-        `is present but empty counts as missing.`,
+      `Missing ${name}.\n${where}\nA value that is present but empty counts as missing.`,
     );
   }
   return value.trim();

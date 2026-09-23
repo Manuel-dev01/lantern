@@ -14,7 +14,14 @@ import { join } from "node:path";
 
 import type { GiftObject, World } from "../src/lib/types.ts";
 import { placeInWorld, readGlbBounds } from "./lib/glb.mts";
-import { formatBytes, readJson, REPO_ROOT, saveBytes, writeJson } from "./lib/storage.mts";
+import {
+  formatBytes,
+  listManifestIds,
+  readManifest,
+  REPO_ROOT,
+  saveBytes,
+  writeManifest,
+} from "./lib/storage.mts";
 import { createTripoClient } from "./lib/tripo.mts";
 
 /**
@@ -50,17 +57,14 @@ const reposition = process.argv.includes("--reposition");
 // Default to the newest generated world.
 let worldId = arg("world-id");
 if (!worldId) {
-  const { readdir } = await import("node:fs/promises");
-  const { join } = await import("node:path");
-  const dir = join(process.cwd(), "public", "worlds");
-  const entries = await readdir(dir).catch(() => [] as string[]);
-  worldId = entries.at(-1);
+  const ids = await listManifestIds();
+  worldId = ids.at(-1);
 }
 if (!worldId) {
   throw new Error("No world found. Run `npm run world:generate` first.");
 }
 
-const world = await readJson<World>(`worlds/${worldId}`, "world.json");
+const world = await readManifest<World>(worldId);
 if (!world) {
   throw new Error(
     `No world.json for ${worldId}. The splat export may have failed — check public/worlds/${worldId}/.`,
@@ -86,7 +90,7 @@ if (reposition) {
       `  ${obj.id}: scale ${placement.scale.toFixed(3)} at [${placement.position.map((n) => n.toFixed(2)).join(", ")}]`,
     );
   }
-  await writeJson(`worlds/${worldId}`, "world.json", world);
+  await writeManifest(worldId, world);
   console.log(`
 Repositioned ${changed} object(s) in world ${worldId}.`);
   process.exit(0);
@@ -146,7 +150,7 @@ const object: GiftObject = {
 };
 
 world.objects = [...(world.objects ?? []), object];
-await writeJson(`worlds/${worldId}`, "world.json", world);
+await writeManifest(worldId, world);
 
 console.log(`\nPlaced in world ${worldId} at [${position.join(", ")}], scale ${scale}.`);
 console.log(`Total ${Math.round((Date.now() - started) / 1000)}s.`);

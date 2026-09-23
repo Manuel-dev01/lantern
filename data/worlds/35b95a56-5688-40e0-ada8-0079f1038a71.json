@@ -1,0 +1,42 @@
+{
+  "id": "35b95a56-5688-40e0-ada8-0079f1038a71",
+  "splatUrl": "/worlds/35b95a56-5688-40e0-ada8-0079f1038a71/splat.spz",
+  "colliderUrl": "/worlds/35b95a56-5688-40e0-ada8-0079f1038a71/collider.glb",
+  "spawn": [
+    -0.02858126163482666,
+    0.0957931756973267,
+    1.3056891560554504
+  ],
+  "target": [
+    -0.02858126163482666,
+    -0.12430202960968018,
+    0.05552244186401367
+  ],
+  "bounds": {
+    "min": [
+      -1.3441051244735718,
+      -0.8579527139663696,
+      -1.730430006980896
+    ],
+    "max": [
+      1.2869426012039185,
+      0.6093486547470093,
+      1.8414748907089233
+    ]
+  },
+  "objects": [
+    {
+      "id": "63665968-1ab3-428f-9015-6477333755c1",
+      "modelUrl": "/worlds/35b95a56-5688-40e0-ada8-0079f1038a71/object-63665968-1ab3-428f-9015-6477333755c1.glb",
+      "position": [
+        -0.02858126163482666,
+        -0.7552416181564331,
+        0.05552244186401367
+      ],
+      "scale": 0.20582419199486304,
+      "caption": "a worn plush stuffed rabbit, well-loved, one ear flopped over"
+    }
+  ],
+  "caption": "The scene is a child's bedroom at dusk, rendered in a photographic style with a soft focus, evoking a strong sense of nostalgia. The overall tone is warm and intimate, characterized by the interplay of orange lamplight and blue shadows. A low-slung bed with rumpled sheets and a disheveled duvet occupies the left side of the room, suggesting recent occupancy. Adjacent to the bed, a bedside lamp emits a warm, orange glow, casting long shadows across the floor and illuminating a small area. To the right, a wooden desk is positioned beneath a window, which is partially obscured by a half-drawn curtain, allowing only a sliver of the fading daylight to penetrate. An open doorway, leading into a dark, unlit hallway, is visible on the far wall, creating a stark contrast between the illuminated room and the unseen space beyond. Toys and books are scattered haphazardly across the carpeted floor, indicating a child's playful presence. The room possesses significant depth, with a substantial expanse of carpet separating the foreground furniture from the distant wall. The bed is situated to the left of the desk, with the lamp directly beside the bed. The doorway is positioned centrally on the far wall, creating a visual axis through the room. ",
+  "thumbnailUrl": "/worlds/35b95a56-5688-40e0-ada8-0079f1038a71/thumbnail.webp"
+}

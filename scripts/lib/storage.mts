@@ -24,6 +24,12 @@ import { fetchWithRetry } from "./net.mts";
 /** Repo root, resolved from this file rather than from `process.cwd()`. */
 export const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const PUBLIC_DIR = join(REPO_ROOT, "public");
+/**
+ * Where world manifests live. Committed, unlike the binaries they point
+ * at, so a deployed build can read them on a machine that has never
+ * downloaded a splat.
+ */
+export const WORLDS_DATA_DIR = join(REPO_ROOT, "data", "worlds");
 
 export interface SavedAsset {
   /** App-relative, e.g. `/worlds/abc123/splat.ply`. Safe to hand to the browser. */
@@ -95,6 +101,32 @@ export async function writeJson(dir: string, filename: string, value: unknown): 
   const path = join(destDir, filename);
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
   return path;
+}
+
+/** Write a world manifest to the committed `data/worlds` directory. */
+export async function writeManifest(worldId: string, value: unknown): Promise<string> {
+  await mkdir(WORLDS_DATA_DIR, { recursive: true });
+  const path = join(WORLDS_DATA_DIR, `${worldId}.json`);
+  await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+  return path;
+}
+
+export async function readManifest<T>(worldId: string): Promise<T | null> {
+  try {
+    return JSON.parse(await readFile(join(WORLDS_DATA_DIR, `${worldId}.json`), "utf8")) as T;
+  } catch {
+    return null;
+  }
+}
+
+export async function listManifestIds(): Promise<string[]> {
+  try {
+    const { readdir } = await import("node:fs/promises");
+    const entries = await readdir(WORLDS_DATA_DIR);
+    return entries.filter((e) => e.endsWith(".json")).map((e) => e.slice(0, -5));
+  } catch {
+    return [];
+  }
 }
 
 export async function readJson<T>(dir: string, filename: string): Promise<T | null> {

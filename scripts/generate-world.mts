@@ -20,7 +20,14 @@ import { join } from "node:path";
 
 import type { World } from "../src/lib/types.ts";
 import { readGlbBounds, spawnFromBounds } from "./lib/glb.mts";
-import { existingAsset, formatBytes, REPO_ROOT, saveAsset, writeJson } from "./lib/storage.mts";
+import {
+  existingAsset,
+  formatBytes,
+  REPO_ROOT,
+  saveAsset,
+  writeJson,
+  writeManifest,
+} from "./lib/storage.mts";
 import {
   elapsed,
   generateWorld,
@@ -200,7 +207,7 @@ if (saved.splat) {
     caption: assets.caption ?? undefined,
     thumbnailUrl: saved.thumbnail,
   };
-  console.log(`\nWrote ${await writeJson(dir, "world.json", record)}`);
+  console.log(`\nWrote ${await writeManifest(worldId, record)}`);
 } else {
   console.error("\nNo splat downloaded — world.json not written, nothing for the app to load.");
 }
