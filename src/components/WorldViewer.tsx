@@ -25,8 +25,17 @@ export default function WorldViewer({ world }: { world: World }) {
     // Marble's mesh export and splat export actually share a coordinate frame.
     // A mismatch produces no error at all - objects just occlude against
     // nothing, or vanish in midair - so it needs to be directly observable.
-    const debugCollider =
-      new URLSearchParams(window.location.search).get("debug") === "collider";
+    const params = new URLSearchParams(window.location.search);
+    const debug = params.get("debug");
+    const debugCollider = debug === "collider";
+    // Skips the depth-only pass entirely, to tell "the occluder is eating my
+    // object" apart from "my object was never there".
+    const noCollider = debug === "nocollider";
+
+    // Draw order within the transparent queue. Everything that needs to
+    // interleave with the splats is forced into that queue, because the opaque
+    // queue always runs first and would write depth ahead of them.
+    const ORDER = { splat: 0, occluder: 1, gift: 2 };
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x05060a);
@@ -72,6 +81,7 @@ export default function WorldViewer({ world }: { world: World }) {
     });
     // Marble/Spark splats arrive Y-down relative to three's convention.
     splat.quaternion.set(1, 0, 0, 0);
+    splat.renderOrder = ORDER.splat;
     scene.add(splat);
 
     splat
@@ -87,7 +97,19 @@ export default function WorldViewer({ world }: { world: World }) {
     // The occlusion trick: draw Marble's mesh export invisibly but into the
     // depth buffer, so Tripo objects placed in the world are correctly hidden
     // behind its geometry instead of floating on top of the splats.
-    if (world.colliderUrl) {
+    //
+    // Draw order is what makes this work. Three renders the opaque queue
+    // before the transparent one, so an opaque occluder writes depth *before*
+    // the splats and then rejects them: it reconstructs the very surfaces the
+    // splats depict, lands fractionally in front, and the ceiling and upper
+    // walls come out solid black. A polygon-offset bias only moves that
+    // problem around, because the error is not a constant.
+    //
+    // Marking the occluder `transparent` is not about opacity - it puts it in
+    // the same queue as the splats, where renderOrder can place it after them:
+    //
+    //   splats (0) -> occluder (1, depth only) -> objects (2)
+    if (world.colliderUrl && !noCollider) {
       new GLTFLoader().load(world.colliderUrl, (gltf) => {
         if (disposed) return;
         gltf.scene.traverse((obj) => {
@@ -103,8 +125,9 @@ export default function WorldViewer({ world }: { world: World }) {
               : new THREE.MeshBasicMaterial({
                   colorWrite: false,
                   depthWrite: true,
+                  transparent: true,
                 });
-            mesh.renderOrder = -1;
+            mesh.renderOrder = ORDER.occluder;
           }
         });
         gltf.scene.name = "collider";
@@ -121,6 +144,18 @@ export default function WorldViewer({ world }: { world: World }) {
         gltf.scene.rotation.y = obj.rotationY ?? 0;
         const s = obj.scale ?? 1;
         gltf.scene.scale.setScalar(s);
+        // Join the same queue as the splats and the occluder, drawn after
+        // both, so the occluder's depth is already laid down to test against.
+        gltf.scene.traverse((node) => {
+          const mesh = node as THREE.Mesh;
+          if (!mesh.isMesh) return;
+          const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+          for (const material of materials) {
+            material.transparent = true;
+            material.depthWrite = true;
+          }
+          mesh.renderOrder = ORDER.gift;
+        });
         gltf.scene.userData.giftObject = obj;
         scene.add(gltf.scene);
       });

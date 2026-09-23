@@ -425,3 +425,63 @@ is closed to us on all three eligibility criteria. There is no third $800 tool a
 
 Confirmed key dates: submission Sep 15 – Oct 5, jury review Oct 5 – 25, winners Oct 25. These
 match the roadmap above, so the Oct 3 freeze and Oct 4 submission hold.
+
+---
+
+## The hybrid renderer — solved (Sep 22)
+
+This is the 25%-of-both-tool-tracks technique, and it took three attempts. Writing down what
+failed, because the failures are not obvious and the symptom is silent.
+
+**The goal.** Marble gives splats (what you see) and a collider mesh of the same room. A Tripo
+object must be hidden when room geometry stands in front of it, and the collider is the only
+geometry available to test against.
+
+**Attempt 1 — collider as an opaque depth-only mesh.** The obvious approach, and the one the
+first implementation used. Three.js renders the **opaque queue before the transparent queue**,
+and Spark's splats are transparent. So the occluder wrote depth *before* the splats and then
+rejected them. Because it reconstructs the very surfaces the splats depict, it lands
+fractionally in front of them: **the ceiling and upper walls rendered as solid black.** There
+is no error, no warning — just missing world.
+
+**Attempt 2 — polygon-offset bias.** Pushing the occluder away from the camera recovered the
+side walls and door at `factor: 16`, but never the ceiling. The offset between mesh surface
+and splat surface is not a constant, so no single bias value is correct everywhere. Abandoned.
+
+**Attempt 3 — what works.** Force all three into the **transparent queue** and order them
+explicitly, in a single render call:
+
+```
+splats (renderOrder 0)  ->  occluder (1, colorWrite:false depthWrite:true)  ->  objects (2)
+```
+
+Marking the occluder `transparent: true` has nothing to do with opacity — it is what moves it
+out of the opaque queue so `renderOrder` can place it *after* the splats. The splats then draw
+first and are never tested against it, so the world always renders in full; the occluder lays
+down room depth without colour; the objects test against that depth.
+
+**Verified end to end.** A Tripo rabbit on the carpet renders correctly lit and scaled, and the
+same rabbit moved beyond the far wall is completely hidden, reappearing with `?debug=nocollider`.
+Occlusion is real, not a trick of the camera angle.
+
+**Do not "simplify" any of this**: the `transparent: true` on an invisible material, the
+renderOrder constants, and the splat's 180° X flip all look removable and are all load-bearing.
+
+### Object placement
+
+Tripo normalises every model to a **unit bounding box**, and Marble worlds are not metric, so
+`scale: 1` put a rabbit two thirds the height of the room's ceiling. Scale and position are now
+derived from the world's bounds (`placeInWorld` in `scripts/lib/glb.mts`): the object is sized
+as a fraction of room height and rested on the floor. `--reposition` re-places existing objects
+without regenerating the mesh, because placement is iterated far more often than geometry.
+
+### Debug flags
+
+- `?debug=collider` — draw the occluder as a visible wireframe (alignment check)
+- `?debug=nocollider` — skip occlusion entirely, to tell "the occluder ate my object" apart
+  from "my object never loaded"
+
+That second flag matters more than it sounds: on a slow connection the splat and the object race
+to load, and a screenshot taken too early shows one without the other. Several contradictory
+results came from that race rather than from any bug. Give captures a generous budget
+(`SHOT_BUDGET_MS=90000`) before concluding anything.

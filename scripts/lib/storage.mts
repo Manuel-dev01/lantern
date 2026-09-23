@@ -19,6 +19,8 @@ import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { fileURLToPath } from "node:url";
 
+import { fetchWithRetry } from "./net.mts";
+
 /** Repo root, resolved from this file rather than from `process.cwd()`. */
 export const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const PUBLIC_DIR = join(REPO_ROOT, "public");
@@ -43,7 +45,7 @@ export async function saveAsset(
   sourceUrl: string,
 ): Promise<SavedAsset> {
   const started = Date.now();
-  const res = await fetch(sourceUrl);
+  const res = await fetchWithRetry(sourceUrl, undefined, { label: filename });
   if (!res.ok || !res.body) {
     throw new Error(
       `Download failed (${res.status} ${res.statusText}) for ${filename}. ` +

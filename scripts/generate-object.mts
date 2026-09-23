@@ -10,9 +10,24 @@
  * A provider URL must never reach the browser.
  */
 
+import { join } from "node:path";
+
 import type { GiftObject, World } from "../src/lib/types.ts";
-import { formatBytes, readJson, saveBytes, writeJson } from "./lib/storage.mts";
+import { placeInWorld, readGlbBounds } from "./lib/glb.mts";
+import { formatBytes, readJson, REPO_ROOT, saveBytes, writeJson } from "./lib/storage.mts";
 import { createTripoClient } from "./lib/tripo.mts";
+
+/**
+ * Scale and position come from the world's own bounds, not from constants.
+ * Tripo normalises every model to a unit bounding box, and Marble worlds are
+ * not metric, so a hardcoded `scale: 1` put a rabbit two thirds the height of
+ * the room's ceiling.
+ */
+async function place(world: World, glbPath: string) {
+  const objectBounds = await readGlbBounds(glbPath);
+  if (!world.bounds || !objectBounds) return null;
+  return placeInWorld(world.bounds, objectBounds, { heightFraction: HEIGHT_FRACTION });
+}
 
 const DEFAULT_PROMPT = "a worn plush stuffed rabbit, well-loved, one ear flopped over";
 
@@ -25,10 +40,12 @@ function arg(name: string): string | undefined {
 }
 
 const prompt = arg("prompt") ?? DEFAULT_PROMPT;
-const scale = Number(arg("scale") ?? 1);
-const position = (arg("at") ?? "0,0.5,-1.5")
-  .split(",")
-  .map(Number) as [number, number, number];
+const HEIGHT_FRACTION = Number(arg("height-fraction") ?? 0.14);
+const scaleOverride = arg("scale") ? Number(arg("scale")) : undefined;
+const positionOverride = arg("at")
+  ? (arg("at")!.split(",").map(Number) as [number, number, number])
+  : undefined;
+const reposition = process.argv.includes("--reposition");
 
 // Default to the newest generated world.
 let worldId = arg("world-id");
@@ -48,6 +65,31 @@ if (!world) {
   throw new Error(
     `No world.json for ${worldId}. The splat export may have failed — check public/worlds/${worldId}/.`,
   );
+}
+
+// Re-place the objects already in this world, without generating anything.
+// Placement is iterated far more often than meshes are, and regenerating a
+// mesh to move it would burn credits for nothing.
+if (reposition) {
+  let changed = 0;
+  for (const obj of world.objects ?? []) {
+    const glbPath = join(REPO_ROOT, "public", obj.modelUrl.replace(/^\//, ""));
+    const placement = await place(world, glbPath);
+    if (!placement) {
+      console.warn(`  ${obj.id}: no bounds available — left as is`);
+      continue;
+    }
+    obj.position = placement.position;
+    obj.scale = placement.scale;
+    changed++;
+    console.log(
+      `  ${obj.id}: scale ${placement.scale.toFixed(3)} at [${placement.position.map((n) => n.toFixed(2)).join(", ")}]`,
+    );
+  }
+  await writeJson(`worlds/${worldId}`, "world.json", world);
+  console.log(`
+Repositioned ${changed} object(s) in world ${worldId}.`);
+  process.exit(0);
 }
 
 const client = createTripoClient();
@@ -86,6 +128,14 @@ if (!downloaded) {
 
 const asset = await saveBytes(`worlds/${worldId}`, `object-${taskId}.glb`, downloaded.data);
 console.log(`  saved ${formatBytes(asset.bytes)} to ${asset.publicUrl}`);
+
+const placement = await place(world, asset.path);
+if (!placement) {
+  console.warn("  No world or object bounds — falling back to a guessed placement.");
+}
+const position = positionOverride ?? placement?.position ?? [0, 0.5, -1.5];
+const scale = scaleOverride ?? placement?.scale ?? 1;
+console.log(`  scale ${scale.toFixed(3)} at [${position.map((n) => n.toFixed(2)).join(", ")}]`);
 
 const object: GiftObject = {
   id: taskId,

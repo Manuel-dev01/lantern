@@ -92,3 +92,39 @@ export function spawnFromBounds(b: GlbBounds): { spawn: Vec3; target: Vec3 } {
     target: [b.center[0], floorY + b.size[1] * 0.5, b.center[2]],
   };
 }
+
+/**
+ * Where a generated object should sit inside a generated world.
+ *
+ * Tripo normalises every model to a unit bounding box, so scale 1 means "as
+ * tall as one world unit" - in a room measuring 1.47 units floor to ceiling
+ * that is a two-thirds-height rabbit. Neither the scale nor the height can be
+ * a constant: both depend on the world, which is why they are computed.
+ *
+ * `heightFraction` is the object's height as a share of the room's height.
+ * 0.14 reads as a small keepsake on the floor; raise it for furniture-sized
+ * things.
+ */
+export function placeInWorld(
+  world: { min: Vec3; max: Vec3 },
+  object: GlbBounds,
+  { heightFraction = 0.14 }: { heightFraction?: number } = {},
+): { position: Vec3; scale: number } {
+  const roomHeight = world.max[1] - world.min[1];
+  const objectHeight = object.size[1] || 1;
+  const scale = (roomHeight * heightFraction) / objectHeight;
+
+  // Rest it on the floor: the model is centred on its own origin, so lift it
+  // by half its scaled height rather than burying it to the waist.
+  const floorY = world.min[1];
+  const restY = floorY - object.min[1] * scale;
+
+  return {
+    position: [
+      (world.min[0] + world.max[0]) / 2,
+      restY,
+      (world.min[2] + world.max[2]) / 2,
+    ],
+    scale,
+  };
+}

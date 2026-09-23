@@ -14,6 +14,7 @@
 
 import { TripoClient } from "@vastai/tripo-sdk";
 import { requireEnv } from "./env.mts";
+import { fetchWithRetry } from "./net.mts";
 
 export const TRIPO_BASE_URL = "https://openapi.tripo3d.ai/v3";
 
@@ -21,5 +22,9 @@ export function createTripoClient(): TripoClient {
   return new TripoClient({
     apiKey: requireEnv("TRIPO_API_KEY"),
     baseUrl: TRIPO_BASE_URL,
+    timeoutMs: 120_000,
+    // The connection to Tripo intermittently fails to establish at all.
+    fetch: ((input: any, init: any) =>
+      fetchWithRetry(input, init, { label: "tripo" })) as typeof globalThis.fetch,
   });
 }
