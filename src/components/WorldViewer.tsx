@@ -60,6 +60,10 @@ export default function WorldViewer({ world }: { world: World }) {
   const [status, setStatus] = useState<Status>("loading");
   const [walkable, setWalkable] = useState(false);
   const [touch, setTouch] = useState(false);
+  // The collider is by far the heaviest asset and gates walking entirely,
+  // so its arrival is worth its own state and its own progress number.
+  const [ground, setGround] = useState(false);
+  const [groundProgress, setGroundProgress] = useState<number | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
   const [message, setMessage] = useState<string>("");
 
@@ -145,6 +149,9 @@ export default function WorldViewer({ world }: { world: World }) {
       });
       player.autoWalk = autoWalk;
       player.setJoystickElements(stickRef.current, thumbRef.current);
+      // Stand on the bounding box straight away. The real collider is several
+      // megabytes and would otherwise leave the player frozen until it lands.
+      if (world.bounds) player.setProvisionalBounds(world.bounds.min, world.bounds.max);
       setWalkable(true);
       setTouch(isTouchDevice());
     }
@@ -209,7 +216,9 @@ export default function WorldViewer({ world }: { world: World }) {
     //
     //   splats (0) -> occluder (1, depth only) -> objects (2)
     if (world.colliderUrl && !noCollider) {
-      new GLTFLoader().load(world.colliderUrl, (gltf) => {
+      new GLTFLoader().load(
+        world.colliderUrl,
+        (gltf) => {
         if (disposed) return;
         gltf.scene.traverse((obj) => {
           if ((obj as THREE.Mesh).isMesh) {
@@ -236,7 +245,16 @@ export default function WorldViewer({ world }: { world: World }) {
         // depth, physics, and walking.
         const collision = mergeSceneGeometry(gltf.scene);
         if (collision) player?.setCollider(collision);
-      });
+        setGround(true);
+        },
+        (event: ProgressEvent) => {
+          if (disposed || !event.lengthComputable || !event.total) return;
+          setGroundProgress(Math.round((event.loaded / event.total) * 100));
+        },
+      );
+    } else {
+      // Nothing to collide with, so never wait for it.
+      setGround(true);
     }
 
     // Tripo-generated gift objects.
@@ -333,6 +351,19 @@ export default function WorldViewer({ world }: { world: World }) {
             {touch
               ? "left thumb to walk · right thumb to look"
               : "click to look around · WASD to walk"}
+          </p>
+        </div>
+      )}
+
+      {/* The room is walkable from the bounding box immediately; the real
+          collider only adds furniture to bump into. Worth saying, not worth
+          blocking on. */}
+      {status === "ready" && walkable && !ground && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-4 grid place-items-center">
+          <p className="text-[11px] tracking-wide text-white/40">
+            {groundProgress === null
+              ? "adding detail…"
+              : `adding detail… ${groundProgress}%`}
           </p>
         </div>
       )}

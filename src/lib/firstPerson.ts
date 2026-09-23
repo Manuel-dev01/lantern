@@ -51,6 +51,8 @@ export class FirstPersonController {
   private readonly spawn: THREE.Vector3;
 
   private bvh: MeshBVH | null = null;
+  /** True while standing on the bounding-box stand-in rather than real geometry. */
+  private provisional = false;
   private readonly velocity = new THREE.Vector3();
   private readonly position = new THREE.Vector3();
   private yaw = 0;
@@ -235,9 +237,44 @@ export class FirstPersonController {
     return typeof document !== "undefined" && document.pointerLockElement === this.domElement;
   }
 
-  /** Feeds the collider geometry in. Until this lands, the player floats. */
+  /** Feeds the collider geometry in. Nobody can stand up before this lands. */
   setCollider(geometry: THREE.BufferGeometry) {
     this.bvh = new MeshBVH(geometry);
+    this.provisional = false;
+  }
+
+  /**
+   * A stand-in floor and walls, built from the world's bounding box.
+   *
+   * The real collider is several megabytes and gates walking completely, which
+   * on a slow connection means minutes of standing still. The bounds are
+   * already in the manifest and cost nothing, so a plain box gives the player
+   * a floor to stand on and walls to stop at from the first frame. The real
+   * mesh replaces it when it arrives, and furniture appears as you would
+   * expect - as detail added to a room you were already standing in.
+   *
+   * Never overwrites a real collider.
+   */
+  setProvisionalBounds(min: [number, number, number], max: [number, number, number]) {
+    if (this.bvh && !this.provisional) return;
+    const box = new THREE.BoxGeometry(
+      max[0] - min[0],
+      max[1] - min[1],
+      max[2] - min[2],
+    );
+    box.translate((min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2);
+    this.bvh = new MeshBVH(box);
+    this.provisional = true;
+  }
+
+  /** False while there is nothing at all to stand on, so gravity is held off. */
+  get hasGround(): boolean {
+    return this.bvh !== null;
+  }
+
+  /** True once the real collider has replaced the bounding-box stand-in. */
+  get hasDetailedGround(): boolean {
+    return this.bvh !== null && !this.provisional;
   }
 
   update(deltaMs: number) {
@@ -254,6 +291,19 @@ export class FirstPersonController {
 
   private step(dt: number) {
     const scale = this.eyeHeight;
+
+    // No collider yet means no floor yet. Applying gravity here drops the
+    // player through a world that has not finished downloading - they fall,
+    // trip the out-of-world recovery, respawn and fall again, forever. Locally
+    // the collider arrives in milliseconds and this never shows; over the
+    // network it is several megabytes and it is all anyone sees.
+    //
+    // So stand still until there is something to stand on. Looking around
+    // still works, because yaw and pitch are handled by the input events.
+    if (!this.bvh) {
+      this.velocity.set(0, 0, 0);
+      return;
+    }
 
     // Horizontal input, in the direction the camera faces.
     this.forward.set(-Math.sin(this.yaw), 0, -Math.cos(this.yaw));

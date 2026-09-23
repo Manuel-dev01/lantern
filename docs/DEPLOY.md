@@ -94,10 +94,18 @@ from disk. Do not "simplify" this by putting Blob URLs in the manifest.
 
 ## Known issues to expect on the live URL
 
-- **The collider is 8.4 MB and blocks both walking and occlusion** until it loads. On
-  cellular this is the dominant cost of the first frame — far more than the 986 KB
-  splat. Decimating it, or deferring it so the world is visible while collision is
-  still arriving, is the obvious next performance move.
+- **The collider is 8.4 MB.** It still gates *occlusion*, and on a slow connection it
+  is the dominant cost of the first frame — far more than the 986 KB splat.
+  Decimating it is the obvious next performance move.
+
+  It no longer gates *walking*. The player stands on a box built from the world
+  bounds from the first frame, and the real mesh replaces it when it arrives. Before
+  that, the live site dropped every visitor through the floor on a loop: gravity ran
+  with no collider, the player fell out of the world, the recovery respawned them, and
+  they fell again. It never reproduced locally, where the collider loads instantly.
+  **Anything gated on a multi-megabyte asset needs a defined behaviour for the seconds
+  before it arrives** — and that behaviour has to be checked over the network, not on
+  localhost.
 - **`/` is statically prerendered**, so the world list is baked at build time. Adding a
   world means redeploying. That has to change before Phase 2, where a visitor generates
   a world that must exist without a rebuild — most likely as a per-gift `/g/<id>` route.
