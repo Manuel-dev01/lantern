@@ -460,9 +460,16 @@ out of the opaque queue so `renderOrder` can place it *after* the splats. The sp
 first and are never tested against it, so the world always renders in full; the occluder lays
 down room depth without colour; the objects test against that depth.
 
-**Verified end to end.** A Tripo rabbit on the carpet renders correctly lit and scaled, and the
-same rabbit moved beyond the far wall is completely hidden, reappearing with `?debug=nocollider`.
-Occlusion is real, not a trick of the camera angle.
+**Verified end to end**, with a control rather than a single suggestive screenshot:
+
+| Occluder | Object position | Result |
+|---|---|---|
+| on | on the carpet | visible, correctly composited and lit |
+| on | beyond the far wall | **hidden** |
+| off | beyond the far wall | **visible, floating through the wall** |
+
+The third row is what makes the second row mean something: the object is hidden *because of the
+occluder*, not because of framing or distance. Screenshots in `shots/`.
 
 **Do not "simplify" any of this**: the `transparent: true` on an invisible material, the
 renderOrder constants, and the splat's 180° X flip all look removable and are all load-bearing.
@@ -485,3 +492,16 @@ That second flag matters more than it sounds: on a slow connection the splat and
 to load, and a screenshot taken too early shows one without the other. Several contradictory
 results came from that race rather than from any bug. Give captures a generous budget
 (`SHOT_BUDGET_MS=90000`) before concluding anything.
+
+### ⚠️ Phase 2 landmine: `/` is statically prerendered
+
+`next build` reports `○ (Static) prerendered as static content` for `/`, so `loadLatestWorld()`
+runs **at build time**. That is fine today — worlds are baked in at deploy — but the gift loop
+needs a world that exists only after a visitor generates one, and a share link that resolves for
+a stranger. Before Phase 2, `/` (or more likely a per-gift `/g/<id>` route) has to stop being a
+build-time static page. Discovering this after the intake flow is built would be expensive.
+
+Also note: `next build` failed twice with `Failed to build /page: / after 3 attempts — took more
+than 60 seconds` while headless Chrome captures were running in parallel. It passes clean on an
+idle machine. Prerender has a 60s per-page budget and this box is slow enough to blow it under
+load — worth remembering before debugging a phantom build bug.
