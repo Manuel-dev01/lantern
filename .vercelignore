@@ -1,0 +1,10 @@
+# Built remotely; never upload the local build.
+.next
+
+# World binaries live in Blob and are mapped in by the rewrite in vercel.ts.
+# Uploading them would defeat the point and cost ~10MB per world.
+public/worlds
+public/objects
+
+# Local verification screenshots.
+shots
