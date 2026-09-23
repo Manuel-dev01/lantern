@@ -50,3 +50,6 @@ scripts/.last-*.log
 
 # local screenshots
 /shots/
+
+.vercel
+.env*

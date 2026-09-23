@@ -14,6 +14,44 @@ import {
 
 type Status = "loading" | "ready" | "error";
 
+/**
+ * Download a file with a plain GET, reporting progress as it streams.
+ *
+ * Deliberately simple: no Range header, no custom headers, nothing that
+ * would turn this into a preflighted cross-origin request.
+ */
+async function fetchWithProgress(
+  url: string,
+  signal: AbortSignal,
+  onProgress: (fraction: number) => void,
+): Promise<Uint8Array> {
+  const res = await fetch(url, { signal });
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText} loading the world`);
+
+  const total = Number(res.headers.get("content-length") ?? 0);
+  if (!res.body || !total) return new Uint8Array(await res.arrayBuffer());
+
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let received = 0;
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    received += value.length;
+    onProgress(received / total);
+  }
+
+  const out = new Uint8Array(received);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return out;
+}
+
 export default function WorldViewer({ world }: { world: World }) {
   const mountRef = useRef<HTMLDivElement>(null);
   const hudRef = useRef<HTMLParagraphElement>(null);
@@ -116,31 +154,44 @@ export default function WorldViewer({ world }: { world: World }) {
     key.position.set(3, 6, 4);
     scene.add(key);
 
-    // A Marble PLY is far heavier than the .spz samples, so the load is long
-    // enough that a static string reads as a hang. Show real progress.
+    // The splat is fetched here rather than handed to Spark as a URL.
+    //
+    // Spark loads a URL with HTTP Range requests, and a Range header is not
+    // CORS-safelisted, so a cross-origin load triggers a preflight - which
+    // Vercel Blob answers with 405. The whole world then fails with nothing
+    // but "network error". A plain GET has no preflight and works fine, so we
+    // do that and pass the bytes in. It also gives an honest progress number,
+    // which a ranged load never reported anyway.
     const isPly = world.splatUrl.toLowerCase().endsWith(".ply");
-    const splat = new SplatMesh({
-      url: world.splatUrl,
-      fileType: isPly ? SplatFileType.PLY : undefined,
-      onProgress: (event: ProgressEvent) => {
-        if (disposed || !event.lengthComputable || !event.total) return;
-        setProgress(Math.round((event.loaded / event.total) * 100));
-      },
-    });
-    // Marble/Spark splats arrive Y-down relative to three's convention.
-    splat.quaternion.set(1, 0, 0, 0);
-    splat.renderOrder = ORDER.splat;
-    scene.add(splat);
+    const abort = new AbortController();
+    let splat: SplatMesh | null = null;
 
-    splat
-      .initialized.then(() => {
-        if (!disposed) setStatus("ready");
-      })
-      .catch((err: unknown) => {
+    void (async () => {
+      try {
+        const bytes = await fetchWithProgress(world.splatUrl, abort.signal, (fraction) => {
+          if (!disposed) setProgress(Math.round(fraction * 100));
+        });
         if (disposed) return;
+
+        splat = new SplatMesh({
+          fileBytes: bytes,
+          // Required: there is no filename to infer the format from.
+          fileType: isPly ? SplatFileType.PLY : SplatFileType.SPZ,
+        });
+        // Marble splats arrive Y-down relative to three's convention; the
+        // collider mesh does not. This flip is what aligns the two.
+        splat.quaternion.set(1, 0, 0, 0);
+        splat.renderOrder = ORDER.splat;
+        scene.add(splat);
+
+        await splat.initialized;
+        if (!disposed) setStatus("ready");
+      } catch (err) {
+        if (disposed || abort.signal.aborted) return;
         setStatus("error");
         setMessage(err instanceof Error ? err.message : String(err));
-      });
+      }
+    })();
 
     // The occlusion trick: draw Marble's mesh export invisibly but into the
     // depth buffer, so Tripo objects placed in the world are correctly hidden
@@ -239,12 +290,13 @@ export default function WorldViewer({ world }: { world: World }) {
           `pos ${p.x.toFixed(2)} ${p.y.toFixed(2)} ${p.z.toFixed(2)}  ` +
           `dir ${dir.x.toFixed(2)} ${dir.y.toFixed(2)} ${dir.z.toFixed(2)}  ` +
           `${player.grounded ? "grounded" : "falling"}  ` +
-          `splats ${splat.visible ? "vis" : "hidden"}/${splat.isInitialized ? "init" : "pending"}`;
+          `splats ${!splat ? "none" : splat.isInitialized ? "init" : "pending"}`;
       }
     });
 
     return () => {
       disposed = true;
+      abort.abort();
       renderer.setAnimationLoop(null);
       window.removeEventListener("resize", onResize);
       controls?.dispose();
