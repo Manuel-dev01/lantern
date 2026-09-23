@@ -505,3 +505,51 @@ Also note: `next build` failed twice with `Failed to build /page: / after 3 atte
 than 60 seconds` while headless Chrome captures were running in parallel. It passes clean on an
 idle machine. Prerender has a 60s per-page budget and this box is slow enough to blow it under
 load — worth remembering before debugging a phantom build bug.
+
+---
+
+## Phase 1 — first-person walking (Sep 23)
+
+Deferred until a real Marble collider existed. It exists, so this is now built:
+`src/lib/firstPerson.ts`, a capsule controller with BVH collision against the collider mesh.
+**The same 8.4 MB asset now does three jobs** — depth occlusion, collision, and the bounds that
+place the camera and the objects. That is the "remove the tool and the project collapses"
+argument for World Labs, made concrete.
+
+**Every constant is scale-invariant.** Marble worlds are not metric and no two are the same
+size, so movement is expressed in *eye heights per second* rather than metres: walk 0.9,
+gravity 6.0, jump 2.6, capsule radius 0.22. A new world needs no tuning at all, and the
+controller behaves identically in a doll's house and a cathedral. Eye height itself is derived
+as 65% of the world's height.
+
+Physics runs in **fixed 120 Hz substeps** with the frame delta clamped to 250 ms, so a stall or
+an alt-tab cannot tunnel the player through a wall on resume.
+
+**Verified** by walking the player into the far wall with `?autowalk=8` and reading the HUD:
+
+| Behaviour | Evidence |
+|---|---|
+| Gravity settles onto the floor | spawn y 0.10 -> 0.14, reports `grounded` |
+| Walking moves the player | z 1.32 -> 0.73 -> -1.31 |
+| Walls stop the player | halted at z -1.31 against a wall at -1.73 (capsule radius 0.21) |
+| Capsule slides along surfaces | x drifted -0.02 -> 0.57 |
+
+Known tuning item: with no step-height limit the capsule rides up onto furniture (the test run
+ended standing on the bed). Walls are still rejected correctly, since only near-horizontal
+surfaces count as standable. Decide later whether climbing onto the bed is a bug or a feature.
+
+### Debug flags, and why they exist
+
+- `?mode=orbit` — inspection camera. Pointer lock needs a real click, so **orbit is the only
+  mode that works in a headless capture**; keep it.
+- `?autowalk=N` — walk forward at N x speed with no input. The multiplier matters: a
+  software-rendered capture manages only a handful of frames, so at 1x the player barely leaves
+  the spawn before the shot is taken. Collision stays sound at high multiples because the
+  substep is fixed.
+- `?hud=1` — prints position, facing, grounded state and splat status. **A screenshot you can
+  read as numbers beats one you squint at**: several "it is broken" conclusions here were
+  actually the splat and the object racing to load, and the HUD is what told them apart.
+
+⚠️ **Headless captures under SwiftShader are flaky about timing**, not about correctness. The
+same URL can produce a full room or a black frame depending on what finished loading. Trust the
+HUD text (always rendered) over the pixels, and never conclude from a single capture.

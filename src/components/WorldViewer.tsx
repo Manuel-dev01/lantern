@@ -6,12 +6,15 @@ import { SparkRenderer, SplatMesh, SplatFileType } from "@sparkjsdev/spark";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { World } from "@/lib/types";
+import { FirstPersonController, mergeSceneGeometry } from "@/lib/firstPerson";
 
 type Status = "loading" | "ready" | "error";
 
 export default function WorldViewer({ world }: { world: World }) {
   const mountRef = useRef<HTMLDivElement>(null);
+  const hudRef = useRef<HTMLParagraphElement>(null);
   const [status, setStatus] = useState<Status>("loading");
+  const [walkable, setWalkable] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
   const [message, setMessage] = useState<string>("");
 
@@ -31,6 +34,15 @@ export default function WorldViewer({ world }: { world: World }) {
     // Skips the depth-only pass entirely, to tell "the occluder is eating my
     // object" apart from "my object was never there".
     const noCollider = debug === "nocollider";
+    // Orbit is the inspection camera: it needs no pointer lock, so it is the
+    // only mode that works in a headless capture. Walking is the real one.
+    const orbitMode = params.get("mode") === "orbit";
+    // Walks forward on its own, so collision can be verified without hands.
+    // `?autowalk=6` walks forward at 6x speed; any positive number works.
+    const autoWalk = Number(params.get("autowalk") ?? 0);
+    // Prints the player's position each frame, so a screenshot can be read as
+    // a number instead of squinted at.
+    const showHud = params.get("hud") === "1" || autoWalk > 0;
 
     // Draw order within the transparent queue. Everything that needs to
     // interleave with the splats is forced into that queue, because the opaque
@@ -57,11 +69,38 @@ export default function WorldViewer({ world }: { world: World }) {
     const spark = new SparkRenderer({ renderer });
     scene.add(spark);
 
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    // Look at the middle of the world, not a fixed point. Marble worlds are
-    // not origin-centred, so a hardcoded target aims at empty space.
-    controls.target.fromArray(world.target ?? [0, 1, 0]);
+    // Eye height and every movement constant scale off the world's own size,
+    // since Marble worlds are not metric and each one differs.
+    const boundsMin = world.bounds?.min ?? [-1, 0, -1];
+    const boundsMax = world.bounds?.max ?? [1, 2, 1];
+    const floorY = boundsMin[1];
+    const eyeHeight = Math.max((boundsMax[1] - floorY) * 0.65, 1e-3);
+
+    let controls: OrbitControls | null = null;
+    let player: FirstPersonController | null = null;
+
+    if (orbitMode) {
+      controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      // Look at the middle of the world, not a fixed point. Marble worlds are
+      // not origin-centred, so a hardcoded target aims at empty space.
+      controls.target.fromArray(world.target ?? [0, 1, 0]);
+    } else {
+      player = new FirstPersonController(camera, renderer.domElement, {
+        eyeHeight,
+        floorY,
+        spawn: new THREE.Vector3().fromArray(world.spawn ?? [0, 1.6, 3]),
+        lookAt: new THREE.Vector3().fromArray(
+          world.target ?? [
+            (boundsMin[0] + boundsMax[0]) / 2,
+            floorY + eyeHeight,
+            (boundsMin[2] + boundsMax[2]) / 2,
+          ],
+        ),
+      });
+      player.autoWalk = autoWalk;
+      setWalkable(true);
+    }
 
     scene.add(new THREE.AmbientLight(0xffffff, 0.8));
     const key = new THREE.DirectionalLight(0xffffff, 1.2);
@@ -132,6 +171,11 @@ export default function WorldViewer({ world }: { world: World }) {
         });
         gltf.scene.name = "collider";
         scene.add(gltf.scene);
+
+        // The same mesh, used a third way: collision. One asset for visuals'
+        // depth, physics, and walking.
+        const collision = mergeSceneGeometry(gltf.scene);
+        if (collision) player?.setCollider(collision);
       });
     }
 
@@ -169,16 +213,33 @@ export default function WorldViewer({ world }: { world: World }) {
     };
     window.addEventListener("resize", onResize);
 
+    let lastFrame = performance.now();
     renderer.setAnimationLoop(() => {
-      controls.update();
+      const now = performance.now();
+      const deltaMs = now - lastFrame;
+      lastFrame = now;
+
+      controls?.update();
+      player?.update(deltaMs);
       renderer.render(scene, camera);
+
+      if (player && showHud && hudRef.current) {
+        const p = player.debugPosition;
+        const dir = camera.getWorldDirection(new THREE.Vector3());
+        hudRef.current.textContent =
+          `pos ${p.x.toFixed(2)} ${p.y.toFixed(2)} ${p.z.toFixed(2)}  ` +
+          `dir ${dir.x.toFixed(2)} ${dir.y.toFixed(2)} ${dir.z.toFixed(2)}  ` +
+          `${player.grounded ? "grounded" : "falling"}  ` +
+          `splats ${splat.visible ? "vis" : "hidden"}/${splat.isInitialized ? "init" : "pending"}`;
+      }
     });
 
     return () => {
       disposed = true;
       renderer.setAnimationLoop(null);
       window.removeEventListener("resize", onResize);
-      controls.dispose();
+      controls?.dispose();
+      player?.dispose();
       renderer.dispose();
       if (renderer.domElement.parentNode === mount) {
         mount.removeChild(renderer.domElement);
@@ -200,6 +261,21 @@ export default function WorldViewer({ world }: { world: World }) {
           </p>
         </div>
       )}
+
+      {/* Pointer lock needs a real click to start, so the invitation to walk
+          has to be part of the page rather than something that just happens. */}
+      {status === "ready" && walkable && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-10 grid place-items-center">
+          <p className="rounded-full bg-black/40 px-4 py-2 text-xs tracking-wide text-white/70 backdrop-blur-sm">
+            click to look around · WASD to walk
+          </p>
+        </div>
+      )}
+
+      <p
+        ref={hudRef}
+        className="pointer-events-none absolute left-3 top-3 font-mono text-xs text-emerald-300/80"
+      />
     </div>
   );
 }
