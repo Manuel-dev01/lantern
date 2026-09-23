@@ -22,8 +22,16 @@ const RADIUS = 0.22;
 /** Below this, a surface counts as floor rather than wall. */
 const GROUND_NORMAL_Y = 0.35;
 const PITCH_LIMIT = Math.PI / 2 - 0.05;
+/** Pixels from the stick's anchor point that count as full tilt. */
+const STICK_RADIUS = 56;
+const TOUCH_LOOK_SPEED = 0.004;
 /** Physics runs in fixed steps so collision cannot be tunnelled through. */
 const STEP_MS = 1000 / 120;
+
+export function isTouchDevice(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.matchMedia?.("(pointer: coarse)").matches ?? "ontouchstart" in window;
+}
 
 export interface FirstPersonOptions {
   /** Eye height above the floor, in world units. Sets the scale of everything. */
@@ -51,6 +59,21 @@ export class FirstPersonController {
   private accumulator = 0;
 
   private readonly keys = new Set<string>();
+
+  /**
+   * Touch input, tracked per finger.
+   *
+   * The screen splits down the middle: a finger landing on the left half
+   * becomes a movement stick anchored wherever it touched down, and one on
+   * the right half drags the view. Anchoring the stick at the touch point
+   * rather than at a fixed spot is what makes it usable without looking -
+   * there is no on-screen target to hit first.
+   */
+  private moveTouch: { id: number; originX: number; originY: number } | null = null;
+  private lookTouch: { id: number; x: number; y: number } | null = null;
+  private readonly moveAxis = new THREE.Vector2();
+  private joystickBase: HTMLElement | null = null;
+  private joystickThumb: HTMLElement | null = null;
   /**
    * Drives the controller forward with no input, for headless verification.
    * The multiplier exists because a software-rendered capture only manages a
@@ -74,6 +97,9 @@ export class FirstPersonController {
   private readonly onKeyUp: (e: KeyboardEvent) => void;
   private readonly onMouseMove: (e: MouseEvent) => void;
   private readonly onClick: () => void;
+  private readonly onTouchStart: (e: TouchEvent) => void;
+  private readonly onTouchMove: (e: TouchEvent) => void;
+  private readonly onTouchEnd: (e: TouchEvent) => void;
 
   constructor(
     camera: THREE.PerspectiveCamera,
@@ -107,8 +133,66 @@ export class FirstPersonController {
       this.pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, this.pitch));
     };
     this.onClick = () => {
+      // Pointer lock means nothing on touch, and requesting it there just
+      // raises a prompt that grants something unusable.
+      if (isTouchDevice()) return;
       if (document.pointerLockElement !== this.domElement) {
         this.domElement.requestPointerLock?.();
+      }
+    };
+
+    this.onTouchStart = (e) => {
+      const half = this.domElement.clientWidth / 2;
+      for (const touch of Array.from(e.changedTouches)) {
+        if (touch.clientX < half && !this.moveTouch) {
+          this.moveTouch = {
+            id: touch.identifier,
+            originX: touch.clientX,
+            originY: touch.clientY,
+          };
+          this.showJoystick(touch.clientX, touch.clientY, 0, 0);
+        } else if (touch.clientX >= half && !this.lookTouch) {
+          this.lookTouch = { id: touch.identifier, x: touch.clientX, y: touch.clientY };
+        }
+      }
+      e.preventDefault();
+    };
+
+    this.onTouchMove = (e) => {
+      for (const touch of Array.from(e.changedTouches)) {
+        if (this.moveTouch && touch.identifier === this.moveTouch.id) {
+          const dx = touch.clientX - this.moveTouch.originX;
+          const dy = touch.clientY - this.moveTouch.originY;
+          // Full tilt at STICK_RADIUS px from the anchor, analog in between.
+          this.moveAxis.set(dx / STICK_RADIUS, dy / STICK_RADIUS);
+          if (this.moveAxis.length() > 1) this.moveAxis.normalize();
+          this.showJoystick(
+            this.moveTouch.originX,
+            this.moveTouch.originY,
+            this.moveAxis.x * STICK_RADIUS,
+            this.moveAxis.y * STICK_RADIUS,
+          );
+        } else if (this.lookTouch && touch.identifier === this.lookTouch.id) {
+          this.yaw -= (touch.clientX - this.lookTouch.x) * TOUCH_LOOK_SPEED;
+          this.pitch -= (touch.clientY - this.lookTouch.y) * TOUCH_LOOK_SPEED;
+          this.pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, this.pitch));
+          this.lookTouch.x = touch.clientX;
+          this.lookTouch.y = touch.clientY;
+        }
+      }
+      e.preventDefault();
+    };
+
+    this.onTouchEnd = (e) => {
+      for (const touch of Array.from(e.changedTouches)) {
+        if (this.moveTouch && touch.identifier === this.moveTouch.id) {
+          this.moveTouch = null;
+          this.moveAxis.set(0, 0);
+          this.hideJoystick();
+        }
+        if (this.lookTouch && touch.identifier === this.lookTouch.id) {
+          this.lookTouch = null;
+        }
       }
     };
 
@@ -116,6 +200,35 @@ export class FirstPersonController {
     window.addEventListener("keyup", this.onKeyUp);
     window.addEventListener("mousemove", this.onMouseMove);
     this.domElement.addEventListener("click", this.onClick);
+    // Deliberately not passive: these have to cancel the browser's own scroll
+    // and pull-to-refresh, or walking drags the page instead of the player.
+    this.domElement.addEventListener("touchstart", this.onTouchStart, { passive: false });
+    this.domElement.addEventListener("touchmove", this.onTouchMove, { passive: false });
+    this.domElement.addEventListener("touchend", this.onTouchEnd);
+    this.domElement.addEventListener("touchcancel", this.onTouchEnd);
+  }
+
+  /**
+   * Optional on-screen stick. Positioned by direct style writes rather than
+   * React state, because this moves every frame a thumb is down.
+   */
+  setJoystickElements(base: HTMLElement | null, thumb: HTMLElement | null) {
+    this.joystickBase = base;
+    this.joystickThumb = thumb;
+    this.hideJoystick();
+  }
+
+  private showJoystick(x: number, y: number, dx: number, dy: number) {
+    if (!this.joystickBase || !this.joystickThumb) return;
+    this.joystickBase.style.display = "block";
+    this.joystickBase.style.left = x + "px";
+    this.joystickBase.style.top = y + "px";
+    this.joystickThumb.style.transform =
+      "translate(calc(-50% + " + dx + "px), calc(-50% + " + dy + "px))";
+  }
+
+  private hideJoystick() {
+    if (this.joystickBase) this.joystickBase.style.display = "none";
   }
 
   get isLocked(): boolean {
@@ -154,11 +267,18 @@ export class FirstPersonController {
     if (this.keys.has("KeyD") || this.keys.has("ArrowRight")) this.delta.add(this.right);
     if (this.keys.has("KeyA") || this.keys.has("ArrowLeft")) this.delta.sub(this.right);
 
+    // Screen y grows downward, so pushing the stick up walks forward.
+    if (this.moveAxis.lengthSq() > 0) {
+      this.delta.addScaledVector(this.forward, -this.moveAxis.y);
+      this.delta.addScaledVector(this.right, this.moveAxis.x);
+    }
+
     const speed =
       (this.keys.has("ShiftLeft") ? RUN_SPEED : WALK_SPEED) *
       scale *
       (this.autoWalk > 0 ? this.autoWalk : 1);
-    if (this.delta.lengthSq() > 0) this.delta.normalize().multiplyScalar(speed * dt);
+    const magnitude = Math.min(this.delta.length(), 1);
+    if (magnitude > 0) this.delta.normalize().multiplyScalar(speed * dt * magnitude);
 
     if (this.onGround && this.keys.has("Space")) {
       this.velocity.y = JUMP_SPEED * scale;
@@ -250,6 +370,10 @@ export class FirstPersonController {
     window.removeEventListener("keyup", this.onKeyUp);
     window.removeEventListener("mousemove", this.onMouseMove);
     this.domElement.removeEventListener("click", this.onClick);
+    this.domElement.removeEventListener("touchstart", this.onTouchStart);
+    this.domElement.removeEventListener("touchmove", this.onTouchMove);
+    this.domElement.removeEventListener("touchend", this.onTouchEnd);
+    this.domElement.removeEventListener("touchcancel", this.onTouchEnd);
     if (this.isLocked) document.exitPointerLock?.();
   }
 }

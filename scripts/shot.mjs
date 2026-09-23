@@ -34,6 +34,8 @@ if (!path.startsWith("/")) path = `/${path}`;
 const out = resolve(process.argv[3] ?? "shots/shot.png");
 const base = process.env.LANTERN_BASE_URL ?? "http://localhost:3000";
 const budget = process.env.SHOT_BUDGET_MS ?? "15000";
+// SHOT_SIZE=390,844 checks the phone layout without a device.
+const size = process.env.SHOT_SIZE ?? "1280,800";
 
 mkdirSync(resolve(out, ".."), { recursive: true });
 
@@ -45,7 +47,7 @@ execFileSync(
     // Software WebGL. Without this the canvas comes back blank.
     "--enable-unsafe-swiftshader",
     "--hide-scrollbars",
-    "--window-size=1280,800",
+    `--window-size=${size}`,
     // Lets the splat decode and first frames land before the capture.
     `--virtual-time-budget=${budget}`,
     `--screenshot=${out}`,

@@ -6,15 +6,22 @@ import { SparkRenderer, SplatMesh, SplatFileType } from "@sparkjsdev/spark";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { World } from "@/lib/types";
-import { FirstPersonController, mergeSceneGeometry } from "@/lib/firstPerson";
+import {
+  FirstPersonController,
+  isTouchDevice,
+  mergeSceneGeometry,
+} from "@/lib/firstPerson";
 
 type Status = "loading" | "ready" | "error";
 
 export default function WorldViewer({ world }: { world: World }) {
   const mountRef = useRef<HTMLDivElement>(null);
   const hudRef = useRef<HTMLParagraphElement>(null);
+  const stickRef = useRef<HTMLDivElement>(null);
+  const thumbRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<Status>("loading");
   const [walkable, setWalkable] = useState(false);
+  const [touch, setTouch] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
   const [message, setMessage] = useState<string>("");
 
@@ -99,7 +106,9 @@ export default function WorldViewer({ world }: { world: World }) {
         ),
       });
       player.autoWalk = autoWalk;
+      player.setJoystickElements(stickRef.current, thumbRef.current);
       setWalkable(true);
+      setTouch(isTouchDevice());
     }
 
     scene.add(new THREE.AmbientLight(0xffffff, 0.8));
@@ -249,7 +258,9 @@ export default function WorldViewer({ world }: { world: World }) {
 
   return (
     <div className="relative h-full w-full">
-      <div ref={mountRef} className="h-full w-full" />
+      {/* touch-action none: the browser must not claim the gesture for
+          scrolling or pull-to-refresh while someone is walking. */}
+      <div ref={mountRef} className="h-full w-full touch-none" />
       {status !== "ready" && (
         <div className="pointer-events-none absolute inset-0 grid place-items-center">
           <p className="text-sm tracking-wide text-white/70">
@@ -267,7 +278,9 @@ export default function WorldViewer({ world }: { world: World }) {
       {status === "ready" && walkable && (
         <div className="pointer-events-none absolute inset-x-0 bottom-10 grid place-items-center">
           <p className="rounded-full bg-black/40 px-4 py-2 text-xs tracking-wide text-white/70 backdrop-blur-sm">
-            click to look around · WASD to walk
+            {touch
+              ? "left thumb to walk · right thumb to look"
+              : "click to look around · WASD to walk"}
           </p>
         </div>
       )}
@@ -276,6 +289,18 @@ export default function WorldViewer({ world }: { world: World }) {
         ref={hudRef}
         className="pointer-events-none absolute left-3 top-3 font-mono text-xs text-emerald-300/80"
       />
+
+      {/* Follows the thumb rather than sitting in a fixed corner, so it never
+          has to be aimed for. Hidden until a finger is down. */}
+      <div
+        ref={stickRef}
+        className="pointer-events-none absolute hidden h-28 w-28 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/20 bg-white/5"
+      >
+        <div
+          ref={thumbRef}
+          className="absolute left-1/2 top-1/2 h-12 w-12 rounded-full bg-white/25"
+        />
+      </div>
     </div>
   );
 }
