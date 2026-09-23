@@ -553,3 +553,38 @@ surfaces count as standable. Decide later whether climbing onto the bed is a bug
 ⚠️ **Headless captures under SwiftShader are flaky about timing**, not about correctness. The
 same URL can produce a full room or a black frame depending on what finished loading. Trust the
 HUD text (always rendered) over the pixels, and never conclude from a single capture.
+
+---
+
+## Phase 1 complete — live URL (Sep 23)
+
+**https://lantern-manuel-dev01s-projects.vercel.app** — public, no login.
+
+Phase 1's milestone was *"a public URL where a stranger walks around a generated world
+containing generated objects."* That now exists: a real Marble world, a Tripo rabbit
+composited into it with correct occlusion, first-person walking with BVH collision, and
+touch controls for phones.
+
+### What deploying taught us
+
+- **Push to git; do not `vercel deploy`.** The CLI uploads the working directory from
+  this machine — 21.9 MB, which died mid-upload. A git push is ~800 KB and Vercel builds
+  from the repo server-side in 29 s. Added `.vercelignore` so a CLI deploy is not
+  catastrophic either (`.next` alone is 201 MB on disk).
+- **Assets must be same-origin.** Pointing manifests at absolute Blob URLs broke
+  everything: Spark's Range requests trigger a CORS preflight that Blob answers with
+  405, and local development slowed to a 153-second splat load. `vercel.ts` now rewrites
+  `/worlds/*` onto the store, so manifests stay relative and both environments work.
+- **Vercel SSO protection is on by default** and bounces every visitor to a login. A
+  hackathon link cannot have that; `vercel project protection disable --sso`.
+
+### Still open, in priority order
+
+1. **Test on a real phone.** Touch controls are written but have never run on a
+   touchscreen — headless Chrome reports `pointer: fine`, so nothing here could exercise
+   them. This is the first thing to do with the live URL.
+2. **The 8.4 MB collider.** It gates both walking and occlusion, and dwarfs the 986 KB
+   splat. On cellular it is the whole first-frame cost. Decimate it, or load it after
+   first paint so the world appears while collision is still arriving.
+3. **`/` is statically prerendered**, so adding a world needs a redeploy. Phase 2 needs a
+   world that exists without a rebuild — most likely a per-gift `/g/<id>` route.

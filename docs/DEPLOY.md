@@ -19,16 +19,23 @@ either regenerated locally or already uploaded to Blob. **A deploy without
 `world:push` will render an empty scene** — the manifests point at `/worlds/...`
 paths that do not exist on the server.
 
+## Live URL
+
+**https://lantern-manuel-dev01s-projects.vercel.app**
+
+Public — Vercel SSO protection is disabled, so a judge can open it with no account.
+The GitHub repo stays private; only the running app is exposed.
+
 ## First-time setup
 
-The Vercel CLI is not installed in this repo's environment. Once:
+Already done for this project, kept for reference:
 
 ```bash
-npm i -g vercel
-vercel login
-vercel link                            # connect this directory to a project
-vercel blob store add lantern-assets   # create the Blob store
-vercel env pull                        # writes .env.local with BLOB_READ_WRITE_TOKEN
+npm i -g vercel && vercel login
+vercel link                                                  # connect the directory
+vercel blob create-store lantern-assets --access public --yes
+vercel env pull                                              # writes .env.local
+vercel project protection disable --sso                      # make the URL public
 ```
 
 `.env.local` is gitignored (covered by `.env*`). The push script reads both `.env`
@@ -37,18 +44,23 @@ and `.env.local`.
 ## Publishing a world
 
 ```bash
-npm run world:push          # uploads binaries, rewrites data/worlds/<id>.json
-git add data/worlds && git commit -m "Publish world <id>"
-vercel deploy --prod
+npm run world:generate      # binaries -> public/worlds/, manifest -> data/worlds/
+npm run world:push          # binaries -> Blob
+git add data/worlds && git commit -m "Publish world <id>" && git push
 ```
 
-`world:push` is idempotent: assets already on Blob are skipped, and uploads use a
-fixed path per world rather than a random suffix, so re-running replaces rather
-than accumulating orphans. Pass `--world-id <id>` for one world, `--force` to
-re-upload.
+**Deploy by pushing to git, not with `vercel deploy`.** A CLI deploy uploads the
+working directory from your machine — that was 21.9 MB and died mid-upload on a
+slow connection. Pushing sends ~800 KB and Vercel pulls the repo server-side, which
+built in 29 s.
 
-After the push, the manifest holds absolute `https://...blob.vercel-storage.com/...`
-URLs. Those work locally too, so local dev keeps working after publishing.
+`world:push` is idempotent: it lists the store once per world and skips what is
+already there, so an unchanged re-run costs one request instead of re-sending
+megabytes. Pass `--world-id <id>` for one world, `--force` to re-upload.
+
+**Manifests keep relative paths and are never rewritten.** `vercel.ts` maps
+`/worlds/*` onto the Blob store in production; locally the same paths are served
+from `public/`. This is deliberate — see the warning below.
 
 ## Checking it worked
 
@@ -64,6 +76,21 @@ not that anything is broken.
 **Test touch on a real phone.** Headless Chrome reports `pointer: fine`, so the touch
 paths cannot be verified from here at all — the deployment is the first real test of
 the movement stick and look drag.
+
+## Why assets are same-origin, and must stay that way
+
+An earlier version pointed manifests at absolute Blob URLs. It broke the world
+twice over, and both failures are silent:
+
+1. **Spark loads splats with HTTP Range requests.** `Range` is not a CORS-safelisted
+   header, so a cross-origin load triggers a preflight — which the Blob host answers
+   with **405**. The only symptom is `could not open this world — network error`,
+   with nothing pointing at CORS.
+2. **Local development pulls every asset back over the internet.** On a slow link a
+   1 MB splat took **153 seconds**, making the app unusable locally.
+
+The rewrite fixes both: same-origin everywhere, no preflight, and local dev reads
+from disk. Do not "simplify" this by putting Blob URLs in the manifest.
 
 ## Known issues to expect on the live URL
 
