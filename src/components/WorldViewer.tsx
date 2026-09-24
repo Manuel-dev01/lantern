@@ -15,6 +15,55 @@ import {
 type Status = "loading" | "ready" | "error";
 
 /**
+ * Pick a level of detail for this device.
+ *
+ * full_res is 26.8 MB. Over a CDN on a desktop that is a couple of seconds; on
+ * a phone on cellular it is the difference between a gift and a blank screen,
+ * and STRATEGY's target is a first frame inside ten seconds on a mid-range
+ * Android. The levels are all mirrored, so this is purely a choice.
+ *
+ * `?lod=` overrides, which is how the difference gets compared without owning
+ * four devices.
+ */
+function pickLod(
+  lods: Record<string, string> | undefined,
+  override: string | null,
+): string | null {
+  if (!lods) return null;
+  if (override && lods[override]) return lods[override];
+
+  const order = ["100k", "150k", "500k", "full_res"];
+  const available = order.filter((l) => lods[l]);
+  if (!available.length) return Object.values(lods)[0] ?? null;
+
+  // Browsers that expose it will admit to a slow link or data-saver mode.
+  const connection = (
+    navigator as Navigator & {
+      connection?: { effectiveType?: string; saveData?: boolean };
+    }
+  ).connection;
+  const frugal =
+    connection?.saveData === true ||
+    (connection?.effectiveType ? /2g|3g/.test(connection.effectiveType) : false);
+
+  const coarse = isTouchDevice();
+  const small = Math.min(window.innerWidth, window.innerHeight) < 600;
+
+  let target: string;
+  if (frugal) target = "100k";
+  else if (coarse || small) target = "500k";
+  else target = "full_res";
+
+  // Step down to the best level at or below the target.
+  const wanted = order.indexOf(target);
+  for (let i = wanted; i >= 0; i--) {
+    if (lods[order[i]]) return lods[order[i]];
+  }
+  return lods[available[0]];
+}
+
+
+/**
  * Download a file with a plain GET, reporting progress as it streams.
  *
  * Deliberately simple: no Range header, no custom headers, nothing that
@@ -169,13 +218,14 @@ export default function WorldViewer({ world }: { world: World }) {
     // but "network error". A plain GET has no preflight and works fine, so we
     // do that and pass the bytes in. It also gives an honest progress number,
     // which a ranged load never reported anyway.
-    const isPly = world.splatUrl.toLowerCase().endsWith(".ply");
+    const splatUrl = pickLod(world.splatLods, params.get("lod")) ?? world.splatUrl;
+    const isPly = splatUrl.toLowerCase().endsWith(".ply");
     const abort = new AbortController();
     let splat: SplatMesh | null = null;
 
     void (async () => {
       try {
-        const bytes = await fetchWithProgress(world.splatUrl, abort.signal, (fraction) => {
+        const bytes = await fetchWithProgress(splatUrl, abort.signal, (fraction) => {
           if (!disposed) setProgress(Math.round(fraction * 100));
         });
         if (disposed) return;
@@ -308,7 +358,8 @@ export default function WorldViewer({ world }: { world: World }) {
           `pos ${p.x.toFixed(2)} ${p.y.toFixed(2)} ${p.z.toFixed(2)}  ` +
           `dir ${dir.x.toFixed(2)} ${dir.y.toFixed(2)} ${dir.z.toFixed(2)}  ` +
           `${player.grounded ? "grounded" : "falling"}  ` +
-          `splats ${!splat ? "none" : splat.isInitialized ? "init" : "pending"}`;
+          `splats ${!splat ? "none" : splat.isInitialized ? "init" : "pending"} ` +
+          `${splatUrl.split("/").pop()}`;
       }
     });
 

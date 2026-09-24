@@ -28,6 +28,15 @@ export interface World {
    */
   splatUrl: string;
   /**
+   * Every mirrored level of detail, keyed by Marble's name for it
+   * ("100k", "150k", "500k", "full_res").
+   *
+   * The viewer picks one at runtime: full_res is 26.8 MB, which is fine over a
+   * CDN on a desktop and indefensible on a phone. `splatUrl` stays as the
+   * default for anything that does not choose.
+   */
+  splatLods?: Record<string, string>;
+  /**
    * Marble's collider mesh (GLB), mirrored to our storage. Never rendered
    * visibly - used for collision and for the depth-only occlusion pass.
    */

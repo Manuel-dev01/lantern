@@ -4,7 +4,8 @@
  *   npm run world:generate
  *   npm run world:generate -- --world-id <id>      # re-mirror an existing world
  *   npm run world:generate -- --model marble-1.1   # escalate past draft
- *   npm run world:generate -- --lod 500k           # smaller splat file
+ *   npm run world:generate -- --lod 500k           # one level of detail
+ *   npm run world:generate -- --lods 150k,500k,full_res   # mirror several
  *
  * A completed generation already carries finished assets: .spz splats at three
  * levels of detail, and a collider mesh GLB. Both are downloaded here and
@@ -54,6 +55,10 @@ function arg(name: string): string | undefined {
 
 const model = arg("model") ?? DEFAULT_MODEL;
 const lod = arg("lod") ?? DEFAULT_LOD;
+// Mirroring several levels costs only bandwidth and lets the viewer choose one
+// per device, which is the only way a 26.8 MB full_res world is usable on a
+// phone.
+const lods = (arg("lods") ?? lod).split(",").map((l) => l.trim()).filter(Boolean);
 const existingId = arg("world-id");
 
 const runStarted = Date.now();
@@ -123,14 +128,26 @@ if (!spzUrls[lod]) {
   console.warn(`  requested LoD "${lod}" missing — falling back to "${available[0][0]}"`);
 }
 
-// The level of detail is part of the filename, so switching between them
-// downloads the new one instead of silently reusing a cached file under a
-// shared name - and so several levels can coexist for a future mobile tier.
-const chosenLod = spzUrls[lod] ? lod : available[0][0];
+// The level of detail is part of the filename, so several can coexist and
+// switching between them downloads the new one rather than silently reusing a
+// cached file under a shared name.
+const wanted = lods.filter((l) => spzUrls[l]);
+const missing = lods.filter((l) => !spzUrls[l]);
+if (missing.length) {
+  console.warn(`  levels not offered by this world: ${missing.join(", ")}`);
+}
+if (!wanted.length) wanted.push(available[0][0]);
 
-const downloads: Array<{ name: string; filename: string; url: string; required: boolean }> = [
-  { name: "splat", filename: `splat-${chosenLod}.spz`, url: splatUrl, required: true },
-];
+const downloads: Array<{ name: string; filename: string; url: string; required: boolean }> =
+  wanted.map((level, i) => ({
+    name: `splat-${level}`,
+    filename: `splat-${level}.spz`,
+    url: spzUrls[level]!,
+    // Only the first has to succeed; the rest are alternative sizes.
+    required: i === 0,
+  }));
+
+const chosenLod = wanted[0];
 
 const colliderUrl = assets.mesh?.collider_mesh_url;
 if (colliderUrl) {
@@ -180,7 +197,17 @@ for (const item of downloads) {
 
 // ─── world.json ─────────────────────────────────────────────────────────────
 
-if (saved.splat) {
+// Collect whichever levels actually made it to disk.
+const splatLods: Record<string, string> = {};
+for (const level of wanted) {
+  const url = saved[`splat-${level}`];
+  if (url) splatLods[level] = url;
+}
+// The heaviest level is the default, and the viewer steps down from there.
+const ORDER = ["100k", "150k", "500k", "full_res"];
+const best = ORDER.filter((l) => splatLods[l]).pop() ?? Object.keys(splatLods)[0];
+
+if (best) {
   // The camera has to be placed from the world's real bounds. A hardcoded
   // spawn put the first world's camera above its ceiling and outside its back
   // wall, because Marble worlds are neither origin-centred nor metric.
@@ -209,7 +236,8 @@ if (saved.splat) {
 
   const record: World = {
     id: worldId,
-    splatUrl: saved.splat,
+    splatUrl: splatLods[best],
+    splatLods,
     colliderUrl: saved.collider,
     spawn: placement.spawn,
     target: placement.target,
@@ -222,11 +250,13 @@ if (saved.splat) {
   };
   console.log(`\nWrote ${await writeManifest(worldId, record)}`);
 } else {
-  console.error("\nNo splat downloaded — world.json not written, nothing for the app to load.");
+  console.error("\nNo splat downloaded — manifest not written, nothing for the app to load.");
 }
 
 // ─── summary ────────────────────────────────────────────────────────────────
 
 console.log(`\n${"─".repeat(60)}`);
-console.log(`World ${worldId} (${model}, lod ${chosenLod}) — total ${elapsed(runStarted)}`);
+// On a resume the model comes from the world, not from our default flag.
+const reportedModel = String(world.model ?? model);
+console.log(`World ${worldId} (${reportedModel}, default lod ${best ?? chosenLod}) — total ${elapsed(runStarted)}`);
 for (const t of timings) console.log(`  ${t.stage.padEnd(12)} ${t.detail}`);

@@ -57,8 +57,12 @@ if (!ids.length) {
 /** Every asset path a manifest names. Relative paths are the ones we host. */
 function assetPaths(world: World): string[] {
   const paths = [world.splatUrl, world.colliderUrl, world.thumbnailUrl];
+  // Every mirrored level of detail, not just the default one - a phone asks
+  // for a smaller splat than the desktop default and it has to be there.
+  for (const url of Object.values(world.splatLods ?? {})) paths.push(url);
   for (const obj of world.objects ?? []) paths.push(obj.modelUrl);
-  return paths.filter((p): p is string => Boolean(p && p.startsWith("/")));
+  // The default level usually also appears in splatLods.
+  return [...new Set(paths.filter((p): p is string => Boolean(p && p.startsWith("/"))))];
 }
 
 let uploaded = 0;

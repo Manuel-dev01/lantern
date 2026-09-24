@@ -1,6 +1,12 @@
 {
   "id": "661635fb-01ff-4fd0-92cd-0653b91b19b0",
   "splatUrl": "/worlds/661635fb-01ff-4fd0-92cd-0653b91b19b0/splat-full_res.spz",
+  "splatLods": {
+    "100k": "/worlds/661635fb-01ff-4fd0-92cd-0653b91b19b0/splat-100k.spz",
+    "150k": "/worlds/661635fb-01ff-4fd0-92cd-0653b91b19b0/splat-150k.spz",
+    "500k": "/worlds/661635fb-01ff-4fd0-92cd-0653b91b19b0/splat-500k.spz",
+    "full_res": "/worlds/661635fb-01ff-4fd0-92cd-0653b91b19b0/splat-full_res.spz"
+  },
   "colliderUrl": "/worlds/661635fb-01ff-4fd0-92cd-0653b91b19b0/collider.glb",
   "spawn": [
     -0.05464184284210205,
@@ -37,6 +43,6 @@
       "caption": "a worn plush stuffed rabbit, well-loved, one ear flopped over"
     }
   ],
-  "caption": "The scene is a child's bedroom at dusk, rendered in a photographic style with a soft focus, evoking a strong sense of nostalgia. The overall tone is warm and intimate, characterized by the interplay of orange lamplight and blue shadows. A low-slung bed with rumpled sheets and a disheveled duvet occupies the left side of the room, suggesting recent occupancy. Adjacent to the bed, a bedside lamp emits a warm, orange glow, casting long shadows across the floor and illuminating a small area. To the right, a wooden desk is positioned beneath a window, which is partially obscured by a half-drawn curtain, allowing only a sliver of the fading daylight to penetrate. An open doorway, leading into a dark, unlit hallway, is visible on the far wall, creating a stark contrast between the illuminated room and the unseen space beyond. Toys and books are scattered haphazardly across the carpeted floor, indicating a child's playful presence. The room possesses significant depth, with a substantial expanse of carpet separating the foreground furniture from the distant wall. The bed is situated to the left of the desk, with the lamp directly beside the bed. The doorway is positioned centrally on the far wall, creating a visual axis through the room. The 360 scene is faultless.",
+  "caption": "The scene is a child's bedroom at dusk, rendered in a photographic style with a soft focus, evoking a strong sense of nostalgia. The overall tone is warm and intimate, characterized by the interplay of orange lamplight and blue shadows. A low-slung bed with rumpled sheets and a disheveled duvet occupies the left side of the room, suggesting recent occupancy. Adjacent to the bed, a bedside lamp emits a warm, orange glow, casting long shadows across the floor and illuminating a small area. To the right, a wooden desk is positioned beneath a window, which is partially obscured by a half-drawn curtain, allowing only a sliver of the fading daylight to penetrate. An open doorway, leading into a dark, unlit hallway, is visible on the far wall, creating a stark contrast between the illuminated room and the unseen space beyond. Toys and books are scattered haphazardly across the carpeted floor, indicating a child's playful presence. The room possesses significant depth, with a substantial expanse of carpet separating the foreground furniture from the distant wall. The bed is situated to the left of the desk, with the lamp directly beside the bed. The doorway is positioned centrally on the far wall, creating a visual axis through the room. ",
   "thumbnailUrl": "/worlds/661635fb-01ff-4fd0-92cd-0653b91b19b0/thumbnail.webp"
 }
