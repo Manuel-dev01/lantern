@@ -588,3 +588,48 @@ touch controls for phones.
    first paint so the world appears while collision is still arriving.
 3. **`/` is statically prerendered**, so adding a world needs a redeploy. Phase 2 needs a
    world that exists without a rebuild — most likely a per-gift `/g/<id>` route.
+
+---
+
+## Splat quality: LoD versus model (Sep 24)
+
+Marble ships three levels of detail per world, and they are **not** a quality dial in the
+way the names suggest:
+
+| LoD | Size (draft world) |
+|---|---|
+| 100k | 0.96 MB |
+| 500k | 4.55 MB |
+| full_res | 20.07 MB |
+
+Going 100k to 500k visibly sharpened the room **at a distance** and changed almost nothing
+**up close**. That distinction is the whole lesson: more splats sample the reconstruction
+more densely, but they cannot invent detail the reconstruction never had. Softness that
+survives a 4.7x increase in splat count is the *model* talking, not the level of detail.
+
+So the two dials are not interchangeable:
+
+- **LoD** trades file size for sampling density. It is the mobile-performance dial.
+- **Model** (`marble-1.0-draft` vs `marble-1.1`) decides how much detail exists at all. It
+  is the quality dial.
+
+Optimising the first while the second is set to draft is wasted bandwidth. Generate hero
+worlds at `marble-1.1`, keep drafts for iteration, and treat LoD purely as the performance
+knob it is.
+
+### Credit budget, and why the 35,000 grant matters
+
+Measured, not estimated: a `marble-1.1` world cost **1,580 credits** (6,770 -> 5,190). A
+draft is ~200.
+
+That makes the free tier's 6,770 worth **4 full worlds, or 33 drafts**. Phase 5 calls for
+10-15 genuinely seeded gifts, which at full quality is 15,000-24,000 credits - more than
+three times the free tier. The hackathon grant is not a bonus; it is what makes the most
+persuasive part of the plan affordable, and it is first-come, first-served.
+
+Check the balance with `npm run world:probe`, which reports it in worlds rather than raw
+numbers, using the undocumented `GET /marble/v1/credits`.
+
+> Writing this file from a shell one-liner mangled it once: backticks inside a
+> double-quoted string are command substitution, so the markdown code spans executed
+> instead of being written. Edit docs from a script file, not `python -c "..."`.
