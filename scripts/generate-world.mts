@@ -25,6 +25,7 @@ import {
   formatBytes,
   REPO_ROOT,
   saveAsset,
+  readManifest,
   writeJson,
   writeManifest,
 } from "./lib/storage.mts";
@@ -201,6 +202,11 @@ if (saved.splat) {
     : { spawn: [0, 1.6, 3] as [number, number, number], target: [0, 1, 0] as [number, number, number] };
   console.log(`  spawn:  [${placement.spawn.map((n) => n.toFixed(2)).join(", ")}]`);
 
+  // Re-mirroring a world must not throw away what has been placed in it.
+  // Generation owns the world's assets and geometry; the objects, and who the
+  // gift is from and to, belong to the gift and are merged back in.
+  const previous = await readManifest<World>(worldId);
+
   const record: World = {
     id: worldId,
     splatUrl: saved.splat,
@@ -208,7 +214,9 @@ if (saved.splat) {
     spawn: placement.spawn,
     target: placement.target,
     bounds: bounds ? { min: bounds.min, max: bounds.max } : undefined,
-    objects: [],
+    objects: previous?.objects ?? [],
+    fromName: previous?.fromName,
+    toName: previous?.toName,
     caption: assets.caption ?? undefined,
     thumbnailUrl: saved.thumbnail,
   };
