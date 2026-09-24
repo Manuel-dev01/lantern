@@ -172,6 +172,23 @@ export interface GenerateWorldResult {
   [key: string]: unknown;
 }
 
+/**
+ * Remaining credits.
+ *
+ * Undocumented, found by probing on Sep 24: `GET /marble/v1/credits` returns
+ * `{ remaining_credits: number }`. Worth having, because a generation that
+ * fails for lack of credits is otherwise indistinguishable from any other
+ * error, and a full marble-1.1 world costs ~1,500 of them.
+ */
+export async function getCredits(): Promise<number | null> {
+  try {
+    const res = await wlFetch<{ remaining_credits?: number }>("/marble/v1/credits");
+    return res.remaining_credits ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** Full world details, for resuming against a world generated earlier. */
 export async function getWorld(worldId: string): Promise<GenerateWorldResult> {
   return wlFetch<GenerateWorldResult>(`/marble/v1/worlds/${worldId}`);

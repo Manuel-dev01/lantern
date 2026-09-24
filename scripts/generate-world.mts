@@ -122,8 +122,13 @@ if (!spzUrls[lod]) {
   console.warn(`  requested LoD "${lod}" missing — falling back to "${available[0][0]}"`);
 }
 
+// The level of detail is part of the filename, so switching between them
+// downloads the new one instead of silently reusing a cached file under a
+// shared name - and so several levels can coexist for a future mobile tier.
+const chosenLod = spzUrls[lod] ? lod : available[0][0];
+
 const downloads: Array<{ name: string; filename: string; url: string; required: boolean }> = [
-  { name: "splat", filename: "splat.spz", url: splatUrl, required: true },
+  { name: "splat", filename: `splat-${chosenLod}.spz`, url: splatUrl, required: true },
 ];
 
 const colliderUrl = assets.mesh?.collider_mesh_url;
@@ -215,5 +220,5 @@ if (saved.splat) {
 // ─── summary ────────────────────────────────────────────────────────────────
 
 console.log(`\n${"─".repeat(60)}`);
-console.log(`World ${worldId} (${model}, lod ${lod}) — total ${elapsed(runStarted)}`);
+console.log(`World ${worldId} (${model}, lod ${chosenLod}) — total ${elapsed(runStarted)}`);
 for (const t of timings) console.log(`  ${t.stage.padEnd(12)} ${t.detail}`);

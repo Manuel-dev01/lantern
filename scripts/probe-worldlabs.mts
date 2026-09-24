@@ -9,7 +9,7 @@
  *   npm run world:probe
  */
 
-import { wlProbe } from "./lib/worldlabs.mts";
+import { getCredits, wlProbe } from "./lib/worldlabs.mts";
 
 const PROBE_PATH = "/marble/v1/worlds/lantern-probe-does-not-exist";
 
@@ -32,6 +32,12 @@ if (status === 401 || status === 403) {
 
 else if (status === 404) {
   console.log("KEY OK — authenticated, and the made-up world was not found (expected).");
+  const credits = await getCredits();
+  if (credits !== null) {
+    console.log(`  credits: ${credits}`);
+    // A draft is ~150-250 credits; marble-1.1 is ~1,500-1,600.
+    console.log(`  that is roughly ${Math.floor(credits / 1550)} full worlds, or ${Math.floor(credits / 200)} drafts.`);
+  }
 }
 
 else console.warn(
