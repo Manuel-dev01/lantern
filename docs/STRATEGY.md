@@ -633,3 +633,51 @@ numbers, using the undocumented `GET /marble/v1/credits`.
 > Writing this file from a shell one-liner mangled it once: backticks inside a
 > double-quoted string are command substitution, so the markdown code spans executed
 > instead of being written. Edit docs from a script file, not `python -c "..."`.
+
+---
+
+## Phase 1 closed: the performance pass (Sep 24)
+
+The hero world is `marble-1.1` (world `661635fb`). Measured against the draft it replaced:
+
+| | draft | marble-1.1 |
+|---|---|---|
+| Credits | ~200 | **1,580** |
+| Generation | 27s | **5m35s** |
+| Collider | 8.4 MB / 338k tris | **4.2 MB / 168k tris** |
+| Levels of detail | 100k, 500k, full_res | 100k, **150k**, 500k, full_res |
+
+**The better model halved the collider.** The single worst performance problem in the
+project - a multi-megabyte mesh gating occlusion - fixed itself by generating properly.
+Decimation is probably unnecessary now.
+
+**The splat is now the dominant cost, not the collider.** At full_res it is 26.8 MB against
+the collider's 4.2 MB. So the performance work is level-of-detail selection, not mesh
+reduction:
+
+| LoD | Size |
+|---|---|
+| 100k | 1.1 MB |
+| 150k | 2.1 MB |
+| 500k | 7.0 MB |
+| full_res | 26.8 MB |
+
+All four are mirrored and pushed. The viewer picks one per device - data-saver or a 2g/3g
+connection gets 100k, a touch device or short screen gets 500k, anything else gets full_res
+- stepping down to whatever is actually mirrored. `?lod=100k` overrides, which is how the
+difference gets compared without owning four devices.
+
+### Correction to an earlier note
+
+An earlier entry suggested the ~5 minute generation time might be a non-problem, because a
+draft finished in 27 seconds. That does not survive contact with the model we will actually
+ship: `marble-1.1` took **5m35s**, exactly what the original roadmap budgeted. Phase 2's
+"make the wait part of the ritual" screen is needed, and it is covering five minutes, not
+five seconds.
+
+### Still open on Phase 1
+
+**Touch controls have never run on a touchscreen.** Headless Chrome reports `pointer: fine`,
+so nothing in this repo can exercise them - the movement stick, the look drag, and the
+non-passive handlers that stop the page scrolling are all written but unproven. This is the
+last thing standing between Phase 1 and done.
