@@ -15,48 +15,41 @@ import {
 type Status = "loading" | "ready" | "error";
 
 /**
- * Pick a level of detail.
+ * Which levels of detail to load, in order.
  *
- * Full detail everywhere, phones included. An earlier version dropped touch
- * devices to 500k to save bandwidth, and the difference was obvious side by
- * side: the same room, visibly softer on the phone. A gift that looks worse
- * because of the device you opened it on is the wrong trade for this product,
- * so weight loses to quality here.
+ * Quality is the point of this product, so the best level is always the one
+ * you end up looking at. But at the bandwidth this has actually been measured
+ * at - 11.7 KB/s - a 22 MB splat is a thirty-two minute blank screen, and a
+ * gift nobody ever sees is worth less than a slightly soft one.
  *
- * The cost is real and worth stating: full_res is 26.8 MB, against STRATEGY's
- * target of a first frame inside ten seconds on a mid-range Android. If that
- * becomes the problem, this is the one function to revisit - every level is
- * already mirrored, so it is a choice and not a regeneration.
- *
- * The exception is a browser explicitly asking for less. Data-saver is the
- * user's own request, not a guess about their hardware, and overriding it
- * would be rude. `?lod=` overrides everything, which is how the levels get
- * compared without owning four devices.
+ * So: load the smallest level first and show the room, then fetch the best one
+ * and swap it in underneath. The visitor is standing in the place within
+ * seconds and it sharpens while they look around. `?lod=` pins a single level,
+ * which is how the difference gets compared.
  */
-function pickLod(
+function lodLadder(
   lods: Record<string, string> | undefined,
+  fallback: string,
   override: string | null,
-): string | null {
-  if (!lods) return null;
-  if (override && lods[override]) return lods[override];
+): string[] {
+  if (!lods) return [fallback];
+  if (override && lods[override]) return [lods[override]];
 
   const order = ["100k", "150k", "500k", "full_res"];
   const available = order.filter((l) => lods[l]);
-  if (!available.length) return Object.values(lods)[0] ?? null;
+  if (!available.length) return [fallback];
 
+  // A browser asking for less has asked explicitly, not been guessed at, so
+  // that request is honoured and nothing bigger is fetched behind it.
   const saveData =
     (navigator as Navigator & { connection?: { saveData?: boolean } }).connection
       ?.saveData === true;
+  if (saveData) return [lods[available[0]]];
 
-  const target = saveData ? "150k" : "full_res";
-
-  // Step down to the best level at or below the target.
-  for (let i = order.indexOf(target); i >= 0; i--) {
-    if (lods[order[i]]) return lods[order[i]];
-  }
-  return lods[available[0]];
+  const first = available[0];
+  const best = available[available.length - 1];
+  return first === best ? [lods[first]] : [lods[first], lods[best]];
 }
-
 
 /**
  * Download a file with a plain GET, reporting progress as it streams.
@@ -121,6 +114,8 @@ export default function WorldViewer({ world }: { world: World }) {
   );
   const [groundProgress, setGroundProgress] = useState<number | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
+  /** Percentage of the sharper level, once the room is already visible. */
+  const [upgrading, setUpgrading] = useState<number | null>(null);
   const [message, setMessage] = useState<string>("");
 
   useEffect(() => {
@@ -223,33 +218,69 @@ export default function WorldViewer({ world }: { world: World }) {
     // but "network error". A plain GET has no preflight and works fine, so we
     // do that and pass the bytes in. It also gives an honest progress number,
     // which a ranged load never reported anyway.
-    const splatUrl = pickLod(world.splatLods, params.get("lod")) ?? world.splatUrl;
-    const isPly = splatUrl.toLowerCase().endsWith(".ply");
+    const ladder = lodLadder(world.splatLods, world.splatUrl, params.get("lod"));
     const abort = new AbortController();
     let splat: SplatMesh | null = null;
+    /** Which level is actually on screen, for the debug readout. */
+    let loadedUrl: string | null = null;
+
+    /** Build a splat from bytes and put it in the scene, replacing any previous one. */
+    function install(bytes: Uint8Array, url: string) {
+      const next = new SplatMesh({
+        fileBytes: bytes,
+        // Required: there are no filenames here to infer a format from.
+        fileType: url.toLowerCase().endsWith(".ply")
+          ? SplatFileType.PLY
+          : SplatFileType.SPZ,
+      });
+      // Marble splats arrive Y-down relative to three's convention; the
+      // collider mesh does not. This flip is what aligns the two.
+      next.quaternion.set(1, 0, 0, 0);
+      next.renderOrder = ORDER.splat;
+      scene.add(next);
+
+      const previous = splat;
+      splat = next;
+      return { next, previous };
+    }
 
     void (async () => {
       try {
-        const bytes = await fetchWithProgress(splatUrl, abort.signal, (fraction) => {
-          if (!disposed) setProgress(Math.round(fraction * 100));
-        });
-        if (disposed) return;
+        for (const [index, url] of ladder.entries()) {
+          const upgrade = index > 0;
+          const bytes = await fetchWithProgress(url, abort.signal, (fraction) => {
+            if (disposed) return;
+            // The first load owns the progress line; an upgrade happens behind
+            // a world the visitor is already standing in and must not reopen
+            // the overlay.
+            if (!upgrade) setProgress(Math.round(fraction * 100));
+            else setUpgrading(Math.round(fraction * 100));
+          });
+          if (disposed) return;
 
-        splat = new SplatMesh({
-          fileBytes: bytes,
-          // Required: there is no filename to infer the format from.
-          fileType: isPly ? SplatFileType.PLY : SplatFileType.SPZ,
-        });
-        // Marble splats arrive Y-down relative to three's convention; the
-        // collider mesh does not. This flip is what aligns the two.
-        splat.quaternion.set(1, 0, 0, 0);
-        splat.renderOrder = ORDER.splat;
-        scene.add(splat);
+          const { next, previous } = install(bytes, url);
+          await next.initialized;
+          if (disposed) return;
 
-        await splat.initialized;
-        if (!disposed) setStatus("ready");
+          // Only drop the old one once the new one is ready to draw, so the
+          // room never blinks out mid-swap.
+          if (previous) {
+            scene.remove(previous);
+            previous.dispose?.();
+          }
+
+          loadedUrl = url;
+          setStatus("ready");
+          if (upgrade) setUpgrading(null);
+        }
       } catch (err) {
         if (disposed || abort.signal.aborted) return;
+        // A failed upgrade is not a failed world: the first level is already
+        // on screen and worth keeping.
+        if (splat) {
+          setUpgrading(null);
+          return;
+        }
         setStatus("error");
         setMessage(err instanceof Error ? err.message : String(err));
       }
@@ -361,7 +392,9 @@ export default function WorldViewer({ world }: { world: World }) {
           `dir ${dir.x.toFixed(2)} ${dir.y.toFixed(2)} ${dir.z.toFixed(2)}  ` +
           `${player.grounded ? "grounded" : "falling"}  ` +
           `splats ${!splat ? "none" : splat.isInitialized ? "init" : "pending"} ` +
-          `${splatUrl.split("/").pop()}`;
+          // Which level is actually on screen right now, which changes as the
+          // ladder climbs.
+          `${(loadedUrl ?? ladder[0]).split("/").pop()}`;
       }
     });
 
@@ -420,6 +453,16 @@ export default function WorldViewer({ world }: { world: World }) {
           </p>
         </div>
       )}
+
+      {/* Quiet, and only while the sharper level is still coming. The room is
+          already there to look at; this just explains why it keeps improving. */}
+      {status === "ready" && upgrading !== null ? (
+        <div className="pointer-events-none absolute inset-x-0 top-4 grid place-items-center">
+          <p className="text-[11px] tracking-wide text-white/30">
+            sharpening… {upgrading}%
+          </p>
+        </div>
+      ) : null}
 
       <p
         ref={hudRef}
