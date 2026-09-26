@@ -32,8 +32,19 @@ export async function POST(request: Request, ctx: RouteContext<"/api/gifts/[id]/
   // already cost credits and still exists, so only the stage that failed needs
   // to run again. Mirroring records each asset as it lands, so a retry picks
   // up where it stopped.
-  if (gift.stage === "failed" && new URL(request.url).searchParams.has("retry")) {
+  const params = new URL(request.url).searchParams;
+
+  if (gift.stage === "failed" && params.has("retry")) {
     gift.stage = gift.worldId ? "world_mirroring" : "world_generating";
+    gift.error = undefined;
+  }
+
+  // Reassemble a finished gift's manifest from the assets already in the
+  // store. No downloads and no credits: the mirroring stage asks the store
+  // what exists and skips anything present. Needed whenever the manifest
+  // shape changes under gifts that were built before it.
+  if (gift.stage === "ready" && gift.worldId && params.has("rebuild")) {
+    gift.stage = "world_mirroring";
     gift.error = undefined;
   }
 
