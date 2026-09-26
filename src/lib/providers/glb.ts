@@ -38,7 +38,18 @@ export interface GlbBounds {
 }
 
 export async function readGlbBounds(path: string): Promise<GlbBounds | null> {
-  const buf = await readFile(path);
+  return parseGlbBounds(await readFile(path));
+}
+
+/**
+ * The same measurement, from bytes rather than a path.
+ *
+ * The runtime pipeline never has a file: it streams a collider from Marble
+ * straight into Blob, and measures the bytes it already holds rather than
+ * downloading its own copy back.
+ */
+export function parseGlbBounds(input: Uint8Array): GlbBounds | null {
+  const buf = Buffer.isBuffer(input) ? input : Buffer.from(input);
   if (buf.length < 12 || buf.readUInt32LE(0) !== 0x46546c67) return null; // "glTF"
 
   let offset = 12;
