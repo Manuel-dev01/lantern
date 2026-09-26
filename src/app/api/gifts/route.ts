@@ -1,4 +1,5 @@
 import { type Gift, newGiftId, writeGift } from "@/lib/gifts";
+import { planGift } from "@/lib/llm";
 import { generateWorld } from "@/lib/providers/worldlabs.ts";
 
 /**
@@ -8,8 +9,9 @@ import { generateWorld } from "@/lib/providers/worldlabs.ts";
  * immediately - the world takes 27 seconds at draft and over five minutes at
  * full quality, and this request has 300. The client polls `tick` from here.
  *
- * Slice 1: the prompt is hardcoded. Slice 2 replaces this with the LLM turning
- * a visitor's answers into one.
+ * A memory becomes a world prompt and an object list through DeepSeek first -
+ * about seven seconds - and only then does Marble start. A caller may pass an
+ * explicit prompt instead, which is how hero worlds are made.
  */
 
 export const dynamic = "force-dynamic";
@@ -47,11 +49,24 @@ export async function POST(request: Request) {
     // An empty body is fine - Slice 1 has defaults for everything.
   }
 
-  const worldPrompt = body.prompt?.trim() || PLACEHOLDER_PROMPT;
   const model = body.model?.trim() || DEFAULT_MODEL;
+  const memory = body.memory?.trim();
   const id = newGiftId();
 
   try {
+    // An explicit prompt wins, so a hero world can be authored by hand. With a
+    // memory, the LLM writes both the place and the things in it. With
+    // neither, the placeholder keeps the endpoint testable.
+    let worldPrompt = body.prompt?.trim() ?? "";
+    let objects: Gift["objects"] = [];
+
+    if (!worldPrompt && memory) {
+      const plan = await planGift(memory);
+      worldPrompt = plan.worldPrompt;
+      objects = plan.objects.map((o) => ({ prompt: o.prompt, name: o.name }));
+    }
+    if (!worldPrompt) worldPrompt = PLACEHOLDER_PROMPT;
+
     const operation = await generateWorld({
       displayName: `Lantern gift ${id}`,
       model,
@@ -74,11 +89,11 @@ export async function POST(request: Request) {
       stage: "world_generating",
       fromName: body.fromName?.trim() || undefined,
       toName: body.toName?.trim() || undefined,
-      memory: body.memory?.trim() || undefined,
+      memory: memory || undefined,
       worldPrompt,
       model,
       operationId,
-      objects: [],
+      objects,
     };
 
     await writeGift(gift);

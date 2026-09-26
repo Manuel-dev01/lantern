@@ -23,6 +23,8 @@ export type GiftStage =
   | "failed";
 
 export interface GiftObjectSpec {
+  /** A couple of plain words, shown to the recipient. */
+  name?: string;
   /** What to ask Tripo for. */
   prompt: string;
   taskId?: string;
