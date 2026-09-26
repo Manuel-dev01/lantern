@@ -5,7 +5,7 @@ import {
   giftAssetPath,
   writeGift,
 } from "./gifts.ts";
-import { mirrorToBlob } from "./providers/blob.ts";
+import { listBlobs, mirrorToBlob } from "./providers/blob.ts";
 import { parseGlbBounds, spawnFromBounds } from "./providers/glb.ts";
 import {
   type GenerateWorldResult,
@@ -126,7 +126,24 @@ async function mirrorWorld(gift: Gift): Promise<AdvanceResult> {
     });
   }
 
-  const done = gift.assets ?? {};
+  // What is already mirrored comes from the store, not from the gift
+  // document.
+  //
+  // Blob enforces a 60-second minimum cache on public objects, so a document
+  // read straight back can be a minute out of date - and acting on that meant
+  // re-downloading a 26 MB splat that was already sitting in the store.
+  // `list` goes to the API rather than the CDN, so it is strongly consistent,
+  // which makes a stale document merely wasteful instead of wrong.
+  const prefix = giftAssetPath(gift.id, "");
+  const present = new Map(
+    (await listBlobs(prefix)).map((blob) => [blob.pathname.slice(prefix.length), blob.url]),
+  );
+
+  const done: Record<string, string> = {};
+  for (const item of wanted) {
+    const url = present.get(item.filename);
+    if (url) done[item.name] = url;
+  }
 
   // One asset per tick. Mirroring them all in a single call is what killed the
   // first attempt: three splats plus a collider is ~36 MB, and the fetch was
@@ -152,6 +169,18 @@ async function mirrorWorld(gift: Gift): Promise<AdvanceResult> {
   }
 
   // Everything is mirrored; assemble the manifest the viewer renders.
+  //
+  // Bounds are measured when the collider is downloaded, but a stale document
+  // can arrive here without them. Fetching the mirrored collider back is
+  // cheap next to regenerating a world, so do that rather than stall.
+  if (!gift.bounds && done.collider) {
+    const res = await fetch(done.collider, { cache: "no-store" });
+    if (res.ok) {
+      const measured = parseGlbBounds(Buffer.from(await res.arrayBuffer()));
+      if (measured) gift.bounds = { min: measured.min, max: measured.max };
+    }
+  }
+
   const splatLods: Record<string, string> = {};
   for (const lod of LODS) {
     const url = done[`splat-${lod}`];

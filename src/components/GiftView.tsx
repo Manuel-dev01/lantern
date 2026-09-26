@@ -20,8 +20,13 @@ const WorldViewer = dynamic(() => import("@/components/WorldViewer"), { ssr: fal
  * `tick` advances one stage server-side, so stopping the poll stops the build.
  */
 
-/** Slow enough not to hammer the providers, fast enough to feel alive. */
-const POLL_MS = 3000;
+/**
+ * Slow enough not to hammer the providers, fast enough to feel alive.
+ *
+ * Not faster: Blob keeps a 60-second minimum cache on the gift document, so a
+ * tighter poll buys no extra freshness and only adds redundant calls.
+ */
+const POLL_MS = 5000;
 
 export default function GiftView({ gift }: { gift: Gift }) {
   const router = useRouter();
