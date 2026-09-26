@@ -681,3 +681,71 @@ five seconds.
 so nothing in this repo can exercise them - the movement stick, the look drag, and the
 non-passive handlers that stop the page scrolling are all written but unproven. This is the
 last thing standing between Phase 1 and done.
+
+---
+
+## Phase 2, Slice 1 - the pipeline works (Sep 26)
+
+A gift can now be created and built by the deployment itself, with no script and no machine of
+mine involved. Verified end to end against production, not localhost:
+
+```
+POST /api/gifts                  -> id, stage: world_generating
+POST /api/gifts/<id>/tick  x3    -> world_generating   (Marble draft)
+                           x5    -> world_mirroring    (one asset per tick)
+                           x3    -> objects_generating
+                           x1    -> ready
+GET  /g/<id>                     -> 200, renders the world
+GET  /g/nonsense                 -> 404
+```
+
+**Measured: a draft gift costs 230 credits** (5,190 -> 4,960), against 1,580 for `marble-1.1`.
+The model flag is honoured, so the budget holds at roughly 21 more runtime gifts.
+
+### Four things this cost an afternoon to learn
+
+**1. Vercel Blob enforces a 60-second minimum cache on public objects.** Setting
+`cacheControlMaxAge: 0` produced `public, max-age=60`, and a read came back with `age: 383`.
+The pipeline read back its own stale document, concluded the work was still pending, and
+re-mirrored the same 26 MB splat in a loop.
+
+The fix is not to fight the cache: **`list()` goes to the Blob API rather than the CDN and is
+strongly consistent**, so the mirroring stage asks the store what exists instead of believing
+the document. A stale read is then merely wasteful rather than wrong. Anything mutable that
+lands in Blob needs this treatment - the defaults are tuned for immutable assets.
+
+**2. One bounded download per call, not one stage.** Mirroring three splat levels plus a
+collider is ~36 MB; the first attempt was terminated at **408 seconds**, past any function
+limit. Each tick now mirrors exactly one asset and records it, so a failure resumes instead of
+restarting.
+
+**3. `.env` is gitignored, so the deployment had no provider keys.** The first production run
+failed with `Missing WORLDLABS_API_KEY`. They have to be uploaded separately
+(`vercel env add`), and the error message now says so - it used to advise editing `.env`, which
+a deployment never sees.
+
+**4. Gift assets must be same-origin too.** The pipeline was writing absolute Blob URLs into
+manifests, contradicting the rule in docs/DEPLOY.md. It works today only because the viewer
+fetches splat bytes with a plain GET; anything reintroducing a Range request would break it
+silently. `/gifts/*` now rewrites onto the store exactly as `/worlds/*` does.
+
+### Local testing of this pipeline is not possible on this connection
+
+The mirroring stage does a download *and* an upload. On the deployment both legs are
+server-side and a tick takes 3-34 seconds. From here the same single 2.1 MB asset exceeded 400
+seconds. **Test the pipeline against the deployment.** Localhost also has no 300-second
+function limit, so it cannot show you the failure that matters.
+
+### Operational escape hatches
+
+- `POST /api/gifts/<id>/tick?retry=1` - resume a failed gift. The world it already paid for
+  still exists, so only the failed stage re-runs.
+- `POST /api/gifts/<id>/tick?rebuild=1` - reassemble a finished gift's manifest from assets
+  already in the store. No downloads, no credits. Needed whenever the manifest shape changes
+  under gifts that were built before it.
+
+### Next
+
+Slices 2-5: the DeepSeek call turning intake answers into a world prompt and object list, the
+intake questions themselves, Tripo objects inside the pipeline, and the share card. The
+architecture they all sit on is now proven.
