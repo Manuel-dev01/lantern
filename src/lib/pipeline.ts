@@ -28,8 +28,15 @@ import {
  * opened, which is a fair trade for having no infrastructure to keep alive.
  */
 
-/** Which levels of detail to mirror. Ordered smallest-first so something renders early. */
-const LODS = ["150k", "500k", "full_res"];
+/**
+ * Which levels of detail to mirror, smallest first.
+ *
+ * 100k matters more than it looks: draft worlds do not offer 150k, so leaving
+ * it out meant the smallest thing a gift could show was a 5 MB splat - about
+ * seven minutes before a first frame on a slow connection. 100k is around
+ * 1 MB, which is the difference between a gift opening and a gift being closed.
+ */
+const LODS = ["100k", "150k", "500k", "full_res"];
 
 /**
  * The path a browser should use for a mirrored asset.
