@@ -775,3 +775,51 @@ memory. The gift is the empty place, held exactly as it was.
 
 Verified against three unrelated memories: three genuinely different places, none mentioning a
 person, each with five objects a hand could pick up.
+
+### The bounding box is not the room (Sep 27)
+
+Both generated gifts opened *outside the building*, looking up at the underside of a roof, then
+fell, respawned and fell again.
+
+A Marble collider takes in everything visible through a window, so the bounding box is not the
+interior. Measured:
+
+| World | Collider size (x x y x z) |
+|---|---|
+| hero bedroom | 2.67 x 1.48 x 3.65 |
+| gift AMKEMNXCVA | 11.4 x 1.75 x **13.0** |
+| gift XWRKN4PWTX | 3.8 x 3.05 x **11.2** |
+
+The centre of a 13-unit box around a small room is a point in the garden. Deriving the camera
+from it worked once, on a tight interior, and that was luck rather than design.
+
+**Marble builds a world around the camera that captured it, so the origin is the viewpoint** -
+already at eye height, already indoors, already facing the way the room was seen. Spawn is the
+origin facing -Z whenever the origin lies inside the world; the bounding box is only the
+fallback for when it does not.
+
+Eye height had the same flaw: a fraction of the whole box makes a giant in an 11-unit world,
+with a capsule too fat to fit through a door. It is now the drop from the camera to the lowest
+geometry, with the fraction kept only as a cap.
+
+**The wider lesson: a generated world's bounding box describes everything it can see, not the
+space you stand in.** Anything derived from it - camera, object placement, movement scale -
+needs a sanity check against a world that is mostly window.
+
+### Bandwidth is a product constraint, not a detail
+
+Measured on this connection: **11.7 KB/s**. Against that:
+
+| Level | Size | Time to first frame |
+|---|---|---|
+| 100k | 1.06 MB | ~1.5 min |
+| 500k | 5.0 MB | ~7 min |
+| full_res | 22.3 MB | **~32 min** |
+
+Serving full detail everywhere was right for quality and wrong for ever being seen. The viewer
+now climbs a ladder - smallest level first, then the best one swapped in underneath once it can
+draw, so the room never blinks - and the pipeline mirrors `100k` too, which it was skipping
+because draft worlds offer no `150k`.
+
+A judge on a bad connection is a real scenario, and the first frame is what decides whether
+they stay.
