@@ -15,6 +15,17 @@ import { readFile } from "node:fs/promises";
 
 const JSON_CHUNK = 0x4e4f534a;
 
+/**
+ * Just enough of the glTF JSON chunk to find POSITION bounds. The format
+ * guarantees accessor min/max exist, so no mesh data is ever decoded.
+ */
+interface Gltf {
+  accessors?: Array<{ count?: number; min?: number[]; max?: number[] }>;
+  meshes?: Array<{
+    primitives?: Array<{ attributes?: Record<string, number>; indices?: number }>;
+  }>;
+}
+
 export type Vec3 = [number, number, number];
 
 export interface GlbBounds {
@@ -31,7 +42,7 @@ export async function readGlbBounds(path: string): Promise<GlbBounds | null> {
   if (buf.length < 12 || buf.readUInt32LE(0) !== 0x46546c67) return null; // "glTF"
 
   let offset = 12;
-  let gltf: Record<string, any> | null = null;
+  let gltf: Gltf | null = null;
   while (offset + 8 <= buf.length) {
     const length = buf.readUInt32LE(offset);
     const type = buf.readUInt32LE(offset + 4);

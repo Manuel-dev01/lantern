@@ -24,7 +24,7 @@ export function createTripoClient(): TripoClient {
     baseUrl: TRIPO_BASE_URL,
     timeoutMs: 120_000,
     // The connection to Tripo intermittently fails to establish at all.
-    fetch: ((input: any, init: any) =>
+    fetch: ((input: Parameters<typeof fetch>[0], init: Parameters<typeof fetch>[1]) =>
       fetchWithRetry(input, init, { label: "tripo" })) as typeof globalThis.fetch,
   });
 }

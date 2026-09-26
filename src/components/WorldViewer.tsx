@@ -15,15 +15,23 @@ import {
 type Status = "loading" | "ready" | "error";
 
 /**
- * Pick a level of detail for this device.
+ * Pick a level of detail.
  *
- * full_res is 26.8 MB. Over a CDN on a desktop that is a couple of seconds; on
- * a phone on cellular it is the difference between a gift and a blank screen,
- * and STRATEGY's target is a first frame inside ten seconds on a mid-range
- * Android. The levels are all mirrored, so this is purely a choice.
+ * Full detail everywhere, phones included. An earlier version dropped touch
+ * devices to 500k to save bandwidth, and the difference was obvious side by
+ * side: the same room, visibly softer on the phone. A gift that looks worse
+ * because of the device you opened it on is the wrong trade for this product,
+ * so weight loses to quality here.
  *
- * `?lod=` overrides, which is how the difference gets compared without owning
- * four devices.
+ * The cost is real and worth stating: full_res is 26.8 MB, against STRATEGY's
+ * target of a first frame inside ten seconds on a mid-range Android. If that
+ * becomes the problem, this is the one function to revisit - every level is
+ * already mirrored, so it is a choice and not a regeneration.
+ *
+ * The exception is a browser explicitly asking for less. Data-saver is the
+ * user's own request, not a guess about their hardware, and overriding it
+ * would be rude. `?lod=` overrides everything, which is how the levels get
+ * compared without owning four devices.
  */
 function pickLod(
   lods: Record<string, string> | undefined,
@@ -36,27 +44,14 @@ function pickLod(
   const available = order.filter((l) => lods[l]);
   if (!available.length) return Object.values(lods)[0] ?? null;
 
-  // Browsers that expose it will admit to a slow link or data-saver mode.
-  const connection = (
-    navigator as Navigator & {
-      connection?: { effectiveType?: string; saveData?: boolean };
-    }
-  ).connection;
-  const frugal =
-    connection?.saveData === true ||
-    (connection?.effectiveType ? /2g|3g/.test(connection.effectiveType) : false);
+  const saveData =
+    (navigator as Navigator & { connection?: { saveData?: boolean } }).connection
+      ?.saveData === true;
 
-  const coarse = isTouchDevice();
-  const small = Math.min(window.innerWidth, window.innerHeight) < 600;
-
-  let target: string;
-  if (frugal) target = "100k";
-  else if (coarse || small) target = "500k";
-  else target = "full_res";
+  const target = saveData ? "150k" : "full_res";
 
   // Step down to the best level at or below the target.
-  const wanted = order.indexOf(target);
-  for (let i = wanted; i >= 0; i--) {
+  for (let i = order.indexOf(target); i >= 0; i--) {
     if (lods[order[i]]) return lods[order[i]];
   }
   return lods[available[0]];
@@ -107,11 +102,23 @@ export default function WorldViewer({ world }: { world: World }) {
   const stickRef = useRef<HTMLDivElement>(null);
   const thumbRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<Status>("loading");
-  const [walkable, setWalkable] = useState(false);
-  const [touch, setTouch] = useState(false);
+  // Both are knowable at mount, so they are computed once in the initialiser
+  // rather than set from inside the effect, which would cost a second render.
+  // Safe to touch window here: the viewer is only ever loaded with ssr: false.
+  const [walkable] = useState(
+    () => new URLSearchParams(window.location.search).get("mode") !== "orbit",
+  );
+  const [touch] = useState(isTouchDevice);
   // The collider is by far the heaviest asset and gates walking entirely,
   // so its arrival is worth its own state and its own progress number.
-  const [ground, setGround] = useState(false);
+  // Starts true when there is nothing to wait for, so the "adding detail" note
+  // never appears for a world without a collider - and so this is not set
+  // synchronously from inside the effect.
+  const [ground, setGround] = useState(
+    () =>
+      !world.colliderUrl ||
+      new URLSearchParams(window.location.search).get("debug") === "nocollider",
+  );
   const [groundProgress, setGroundProgress] = useState<number | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
   const [message, setMessage] = useState<string>("");
@@ -201,8 +208,6 @@ export default function WorldViewer({ world }: { world: World }) {
       // Stand on the bounding box straight away. The real collider is several
       // megabytes and would otherwise leave the player frozen until it lands.
       if (world.bounds) player.setProvisionalBounds(world.bounds.min, world.bounds.max);
-      setWalkable(true);
-      setTouch(isTouchDevice());
     }
 
     scene.add(new THREE.AmbientLight(0xffffff, 0.8));
@@ -302,9 +307,6 @@ export default function WorldViewer({ world }: { world: World }) {
           setGroundProgress(Math.round((event.loaded / event.total) * 100));
         },
       );
-    } else {
-      // Nothing to collide with, so never wait for it.
-      setGround(true);
     }
 
     // Tripo-generated gift objects.
