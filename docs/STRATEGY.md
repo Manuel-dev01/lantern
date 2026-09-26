@@ -749,3 +749,29 @@ function limit, so it cannot show you the failure that matters.
 Slices 2-5: the DeepSeek call turning intake answers into a world prompt and object list, the
 intake questions themselves, Tripo objects inside the pipeline, and the share card. The
 architecture they all sit on is now proven.
+
+### Slice 2 done - a memory becomes a place (Sep 26)
+
+"Her kitchen in Lagos, always too hot, always smelling of fried plantain" produced a prompt
+naming a jalousie window, a chipped enamel sink, terrazzo floor and a two-burner gas cooker -
+and Marble built it: louvred light bars across the wall, tiled splashback, a blackened pan on
+the burner, and nobody in the room. Objects came back as the black frying pan, the wooden
+spoon, the enamel cup, the red basin, the overripe plantains.
+
+Two findings about `deepseek-flash`, both from probing rather than from its docs:
+
+- **`response_format: {type: "json_schema"}` is rejected outright** - *"This response_format
+  type is unavailable now"*. Only `json_object` works, so the shape is validated in
+  `src/lib/llm.ts` instead. A half-right answer caught there is far cheaper than one
+  discovered after a world has been generated from it.
+- **It is a reasoning model defaulting to high effort.** The first call spent its entire
+  700-token budget reasoning and returned an empty string. It needs `effort: "low"` and real
+  headroom; at low effort a plan takes 6-11 seconds.
+
+**The instruction that earns its place is "NO PEOPLE."** Left alone the model writes the scene
+as a photograph of the moment - *"two brothers stand around a dismantled bicycle"* - and Marble
+renders what it is told, so the recipient walks in on strangers standing inside their own
+memory. The gift is the empty place, held exactly as it was.
+
+Verified against three unrelated memories: three genuinely different places, none mentioning a
+person, each with five objects a hand could pick up.
