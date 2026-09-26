@@ -17,7 +17,7 @@ export default async function GiftPage(props: PageProps<"/g/[id]">) {
   if (!gift) notFound();
 
   return (
-    <main className="h-dvh w-dvw bg-[#05060a]">
+    <main className="h-dvh w-full bg-[#05060a]">
       <GiftView gift={gift} />
     </main>
   );

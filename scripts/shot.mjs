@@ -26,10 +26,18 @@ if (!CHROME) {
 }
 
 let path = process.argv[2] ?? "/";
-// Git Bash rewrites a bare "/" argument into the MSYS install directory, which
-// turns the URL into nonsense. Anything that came back as a Windows path was
-// meant to be the site root.
-if (/^[A-Za-z]:[\\/]/.test(path)) path = "/";
+// Git Bash rewrites any argument starting with "/" into a Windows path, so
+// "/make" arrives as something like "C:/Program Files/Git/make".
+if (/^[A-Za-z]:[\\/]/.test(path)) {
+  // Say so. Falling back to "/" silently captures the wrong page, which then
+  // reads as a bug in the app rather than in the shell - it cost one wrong
+  // screenshot already.
+  console.warn(
+    `Git Bash rewrote the path argument into "${path}", so it fell back to "/".\n` +
+      `Prefix the command with MSYS_NO_PATHCONV=1 to pass a route such as /make.`,
+  );
+  path = "/";
+}
 if (!path.startsWith("/")) path = `/${path}`;
 const out = resolve(process.argv[3] ?? "shots/shot.png");
 const base = process.env.LANTERN_BASE_URL ?? "http://localhost:3000";
