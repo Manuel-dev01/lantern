@@ -13,7 +13,7 @@
 import { join } from "node:path";
 
 import type { GiftObject, World } from "../src/lib/types.ts";
-import { placeInWorld, readGlbBounds } from "./lib/glb.mts";
+import { placeInWorld, readGlbBounds } from "../src/lib/providers/glb.ts";
 import {
   formatBytes,
   listManifestIds,
@@ -22,7 +22,7 @@ import {
   saveBytes,
   writeManifest,
 } from "./lib/storage.mts";
-import { createTripoClient } from "./lib/tripo.mts";
+import { createTripoClient } from "../src/lib/providers/tripo.ts";
 
 /**
  * Scale and position come from the world's own bounds, not from constants.

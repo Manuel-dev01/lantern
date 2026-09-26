@@ -19,7 +19,7 @@ import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { fileURLToPath } from "node:url";
 
-import { fetchWithRetry } from "./net.mts";
+import { fetchWithRetry } from "../../src/lib/providers/net.ts";
 
 /** Repo root, resolved from this file rather than from `process.cwd()`. */
 export const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));

@@ -13,8 +13,8 @@
  */
 
 import { TripoClient } from "@vastai/tripo-sdk";
-import { requireEnv } from "./env.mts";
-import { fetchWithRetry } from "./net.mts";
+import { requireEnv } from "./env.ts";
+import { fetchWithRetry } from "./net.ts";
 
 export const TRIPO_BASE_URL = "https://openapi.tripo3d.ai/v3";
 

@@ -9,7 +9,7 @@
  *   npm run world:probe
  */
 
-import { getCredits, wlProbe } from "./lib/worldlabs.mts";
+import { getCredits, wlProbe } from "../src/lib/providers/worldlabs.ts";
 
 const PROBE_PATH = "/marble/v1/worlds/lantern-probe-does-not-exist";
 

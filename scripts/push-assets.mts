@@ -27,7 +27,7 @@ import { join } from "node:path";
 import { list, put } from "@vercel/blob";
 
 import type { World } from "../src/lib/types.ts";
-import { requireEnv } from "./lib/env.mts";
+import { requireEnv } from "../src/lib/providers/env.ts";
 import { formatBytes, listManifestIds, readManifest, REPO_ROOT } from "./lib/storage.mts";
 
 function arg(name: string): string | undefined {

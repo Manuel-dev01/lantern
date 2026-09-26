@@ -8,7 +8,7 @@
  * not "clean up" those errors into a generic message.
  */
 
-import { requireEnv } from "./env.mts";
+import { requireEnv } from "./env.ts";
 
 export const BASE_URL = "https://api.worldlabs.ai";
 

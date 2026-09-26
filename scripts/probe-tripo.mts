@@ -9,7 +9,7 @@
  *   npm run object:probe
  */
 
-import { createTripoClient, TRIPO_BASE_URL } from "./lib/tripo.mts";
+import { createTripoClient, TRIPO_BASE_URL } from "../src/lib/providers/tripo.ts";
 
 const client = createTripoClient();
 console.log(`base: ${TRIPO_BASE_URL}`);

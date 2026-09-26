@@ -20,7 +20,7 @@
 import { join } from "node:path";
 
 import type { World } from "../src/lib/types.ts";
-import { readGlbBounds, spawnFromBounds } from "./lib/glb.mts";
+import { readGlbBounds, spawnFromBounds } from "../src/lib/providers/glb.ts";
 import {
   existingAsset,
   formatBytes,
@@ -37,7 +37,7 @@ import {
   pollOperation,
   WorldLabsError,
   type GenerateWorldResult,
-} from "./lib/worldlabs.mts";
+} from "../src/lib/providers/worldlabs.ts";
 
 // Written for the theme: a doorway, a desk and a bed give hard occluders at
 // three distinct depths, which is exactly what the Tripo-behind-splat
