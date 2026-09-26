@@ -174,7 +174,16 @@ export default function WorldViewer({ world }: { world: World }) {
     const boundsMin = world.bounds?.min ?? [-1, 0, -1];
     const boundsMax = world.bounds?.max ?? [1, 2, 1];
     const floorY = boundsMin[1];
-    const eyeHeight = Math.max((boundsMax[1] - floorY) * 0.65, 1e-3);
+    // Eye height is the drop from where the camera stands to the lowest
+    // geometry, not a fraction of the whole box. A collider takes in whatever
+    // is visible through a window, so the box can be several times the height
+    // of the room - and a fraction of that makes a giant with a capsule too
+    // fat to fit through a door. The fraction stays only as a cap.
+    const spawnY = world.spawn?.[1] ?? 0;
+    const eyeHeight = Math.max(
+      Math.min(spawnY - floorY, (boundsMax[1] - floorY) * 0.65),
+      1e-3,
+    );
 
     let controls: OrbitControls | null = null;
     let player: FirstPersonController | null = null;

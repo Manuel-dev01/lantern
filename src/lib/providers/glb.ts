@@ -103,11 +103,31 @@ export function parseGlbBounds(input: Uint8Array): GlbBounds | null {
 }
 
 /**
- * A camera position inside the world rather than outside it: centred
- * horizontally, at roughly standing eye height off the floor, set back toward
- * one end so the room is in front of you.
+ * Where to stand when the world opens.
+ *
+ * The origin, facing -Z, whenever the origin is inside the world. Marble
+ * builds a world around the camera that captured it, so (0,0,0) is the
+ * viewpoint the whole scene was reconstructed from - already at eye height,
+ * already indoors, already facing the way the room was seen.
+ *
+ * The centre of the bounding box is *not* that. A collider includes everything
+ * visible through a window, so the box can be far bigger than the room: two
+ * generated gifts measured 13 and 11 units deep against a bedroom's 3.65. Both
+ * put the camera outside the building looking up at the underside of a roof,
+ * then falling, respawning at the same bad spot, and falling again.
+ *
+ * The box is only used when the origin really is outside it, which means the
+ * world was built somewhere other than around its own camera.
  */
 export function spawnFromBounds(b: GlbBounds): { spawn: Vec3; target: Vec3 } {
+  const originInside = [0, 1, 2].every((i) => b.min[i] <= 0 && b.max[i] >= 0);
+
+  if (originInside) {
+    // -Z is the direction a three.js camera looks by default, and the
+    // direction Marble's capture faced.
+    return { spawn: [0, 0, 0], target: [0, 0, -Math.max(b.size[2] * 0.25, 0.5)] };
+  }
+
   const floorY = b.min[1];
   return {
     spawn: [b.center[0], floorY + b.size[1] * 0.65, b.center[2] + b.size[2] * 0.35],
