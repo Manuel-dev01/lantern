@@ -72,6 +72,11 @@ export async function writeBlobJson(pathname: string, value: unknown): Promise<s
     addRandomSuffix: false,
     allowOverwrite: true,
     contentType: "application/json",
+    // Blob caches public objects for a month by default. That is right for a
+    // splat, which never changes, and badly wrong for a document rewritten at
+    // every stage: the pipeline read back its own stale copy, concluded the
+    // work was still pending, and re-mirrored the same asset forever.
+    cacheControlMaxAge: 0,
   });
   return result.url;
 }
@@ -79,10 +84,11 @@ export async function writeBlobJson(pathname: string, value: unknown): Promise<s
 export async function readBlobJson<T>(pathname: string): Promise<T | null> {
   try {
     const meta = await head(pathname, { token: token() });
-    // `cache: no-store` because a gift document changes as the pipeline
-    // advances, and a cached copy would show a finished world as still
-    // generating.
-    const res = await fetchWithRetry(meta.url, { cache: "no-store" }, { label: pathname });
+    // Belt and braces with `cacheControlMaxAge` above: any document written
+    // before that existed still carries a long TTL, and an edge cache between
+    // here and the store may ignore `no-store`. A unique query defeats both.
+    const fresh = `${meta.url}${meta.url.includes("?") ? "&" : "?"}ts=${Date.now()}`;
+    const res = await fetchWithRetry(fresh, { cache: "no-store" }, { label: pathname });
     if (!res.ok) return null;
     return (await res.json()) as T;
   } catch {
