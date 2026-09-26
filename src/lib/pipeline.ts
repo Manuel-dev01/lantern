@@ -31,6 +31,19 @@ import {
 /** Which levels of detail to mirror. Ordered smallest-first so something renders early. */
 const LODS = ["150k", "500k", "full_res"];
 
+/**
+ * The path a browser should use for a mirrored asset.
+ *
+ * Same-origin, never the Blob host directly. vercel.ts rewrites `/gifts/*`
+ * onto the store, exactly as it does for `/worlds/*`. Handing out Blob URLs
+ * instead is the mistake documented in docs/DEPLOY.md: Spark loads splats with
+ * Range requests, `Range` is not CORS-safelisted, and the preflight comes back
+ * 405 with no hint that CORS was ever involved.
+ */
+function assetHref(gift: Gift, filename: string): string {
+  return `/${giftAssetPath(gift.id, filename)}`;
+}
+
 export interface AdvanceResult {
   gift: Gift;
   /** True when this call changed something, so the caller can pace its polling. */
@@ -139,10 +152,16 @@ async function mirrorWorld(gift: Gift): Promise<AdvanceResult> {
     (await listBlobs(prefix)).map((blob) => [blob.pathname.slice(prefix.length), blob.url]),
   );
 
+  // Two views of the same asset: `done` holds the absolute Blob URL for
+  // server-side use, `hrefs` the same-origin path the browser is given.
   const done: Record<string, string> = {};
+  const hrefs: Record<string, string> = {};
   for (const item of wanted) {
     const url = present.get(item.filename);
-    if (url) done[item.name] = url;
+    if (url) {
+      done[item.name] = url;
+      hrefs[item.name] = assetHref(gift, item.filename);
+    }
   }
 
   // One asset per tick. Mirroring them all in a single call is what killed the
@@ -183,8 +202,8 @@ async function mirrorWorld(gift: Gift): Promise<AdvanceResult> {
 
   const splatLods: Record<string, string> = {};
   for (const lod of LODS) {
-    const url = done[`splat-${lod}`];
-    if (url) splatLods[lod] = url;
+    const href = hrefs[`splat-${lod}`];
+    if (href) splatLods[lod] = href;
   }
   const best = LODS.filter((l) => splatLods[l]).pop()!;
 
@@ -215,13 +234,13 @@ async function mirrorWorld(gift: Gift): Promise<AdvanceResult> {
     id: gift.worldId,
     splatUrl: splatLods[best],
     splatLods,
-    colliderUrl: done.collider,
+    colliderUrl: hrefs.collider,
     bounds: gift.bounds,
     spawn,
     target,
     objects: [],
     caption: assets.caption ?? undefined,
-    thumbnailUrl: done.thumbnail,
+    thumbnailUrl: hrefs.thumbnail,
     fromName: gift.fromName,
     toName: gift.toName,
   };

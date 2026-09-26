@@ -24,9 +24,26 @@ const BLOB_HOST = "https://5qgtncatzt22bvcl.public.blob.vercel-storage.com";
 
 export const config: VercelConfig = {
   framework: "nextjs",
-  rewrites: [routes.rewrite("/worlds/(.*)", `${BLOB_HOST}/worlds/$1`)],
+  rewrites: [
+    routes.rewrite("/worlds/(.*)", `${BLOB_HOST}/worlds/$1`),
+    // Visitor-generated gifts, same reasoning as worlds above.
+    routes.rewrite("/gifts/(.*)", `${BLOB_HOST}/gifts/$1`),
+  ],
   headers: [
     routes.cacheControl("/worlds/(.*)", {
+      public: true,
+      maxAge: "1 year",
+      immutable: true,
+    }),
+    // Gift *assets* are immutable once written. The gift document itself is
+    // not, but that is read server-side through the Blob API and never
+    // through this path.
+    routes.cacheControl("/gifts/(.*).spz", {
+      public: true,
+      maxAge: "1 year",
+      immutable: true,
+    }),
+    routes.cacheControl("/gifts/(.*).glb", {
       public: true,
       maxAge: "1 year",
       immutable: true,
