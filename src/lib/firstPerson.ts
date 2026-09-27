@@ -21,6 +21,14 @@ const JUMP_SPEED = 2.6;
 const RADIUS = 0.22;
 /** Below this, a surface counts as floor rather than wall. */
 const GROUND_NORMAL_Y = 0.35;
+/**
+ * How far up the player will step, in eye heights.
+ *
+ * 0.3 of an eye height is about 48cm for a person - generous for a kerb or a
+ * stair, and short of the ~75cm table that was putting the camera through the
+ * ceiling. Anything taller blocks rather than lifts.
+ */
+const STEP_HEIGHT = 0.3;
 const PITCH_LIMIT = Math.PI / 2 - 0.05;
 /** Pixels from the stick's anchor point that count as full tilt. */
 const STICK_RADIUS = 56;
@@ -336,8 +344,13 @@ export class FirstPersonController {
     }
 
     this.velocity.y -= GRAVITY * scale * dt;
+
     this.position.addScaledVector(this.velocity, dt).add(this.delta);
 
+    // The step limit lives inside collision resolution, where contact heights
+    // are known. Comparing how far one substep rose does not work: physics
+    // runs at 120Hz, so walking up an edge gains a fraction of a millimetre
+    // per step and no per-step threshold is ever crossed.
     this.resolveCollisions(scale);
 
     // A world with holes in its mesh can drop the player out of the bottom.
@@ -377,6 +390,11 @@ export class FirstPersonController {
 
     let landed = false;
 
+    // The lowest point of the capsule when this resolve began. Anything
+    // standable has to be within a step of it.
+    const feet = this.segment.end.y - radius;
+    const step = STEP_HEIGHT * scale;
+
     bvh.shapecast({
       intersectsBounds: (box) => box.intersectsBox(this.box),
       intersectsTriangle: (tri) => {
@@ -388,7 +406,28 @@ export class FirstPersonController {
         if (distance < radius) {
           const depth = radius - distance;
           const direction = this.capsulePoint.sub(this.triPoint).normalize();
-          if (direction.y > GROUND_NORMAL_Y) landed = true;
+
+          if (direction.y > GROUND_NORMAL_Y) {
+            // An upward push is only a floor if it is near the feet. A table
+            // top is a horizontal surface too, and letting one lift the capsule
+            // walks the player onto the furniture - which in a room 1.75 units
+            // tall puts the camera through the ceiling.
+            //
+            // Checking the contact height rather than how far a single
+            // substep rose is what matters: physics runs at 120Hz, so creeping
+            // up an edge gains a fraction of a millimetre per step and any
+            // per-step threshold is never reached.
+            if (this.triPoint.y - feet > step) {
+              // Too high to stand on, so it blocks instead. Flatten the push
+              // to horizontal and let it act as a wall.
+              direction.y = 0;
+              if (direction.lengthSq() < 1e-8) return false;
+              direction.normalize();
+            } else {
+              landed = true;
+            }
+          }
+
           this.segment.start.addScaledVector(direction, depth);
           this.segment.end.addScaledVector(direction, depth);
         }
