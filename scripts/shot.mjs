@@ -10,7 +10,7 @@
  * asking a human to look at the screen.
  */
 
-import { execFileSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -47,7 +47,7 @@ const size = process.env.SHOT_SIZE ?? "1280,800";
 
 mkdirSync(resolve(out, ".."), { recursive: true });
 
-execFileSync(
+const result = spawnSync(
   CHROME,
   [
     "--headless=new",
@@ -58,10 +58,30 @@ execFileSync(
     `--window-size=${size}`,
     // Lets the splat decode and first frames land before the capture.
     `--virtual-time-budget=${budget}`,
+    // Surfaces the page's own console on stderr. Without it a failed asset
+    // shows up only as "could not open this world - Failed to fetch" painted
+    // into the screenshot, with no way to tell which URL failed or why - which
+    // cost two blind five-minute captures.
+    "--enable-logging=stderr",
+    "--log-level=0",
     `--screenshot=${out}`,
     `${base}${path}`,
   ],
-  { stdio: ["ignore", "ignore", "pipe"] },
+  { stdio: ["ignore", "ignore", "pipe"], encoding: "utf8" },
 );
+
+// Chrome is voluble on stderr, so only the lines worth reading are echoed.
+const noise = /Fontconfig|GpuChannel|gpu_|dbus|Vulkan|DevTools listening|SharedImage/i;
+const lines = (result.stderr ?? "")
+  .split("\n")
+  .filter((line) => line.trim() && !noise.test(line))
+  .filter((line) => /CONSOLE|ERROR:|error|fail|refused|blocked|CORS/i.test(line));
+
+for (const line of lines.slice(0, 40)) console.log(`  chrome| ${line.trim()}`);
+
+if (result.status !== 0) {
+  console.error(`Chrome exited ${result.status}.`);
+  process.exit(result.status ?? 1);
+}
 
 console.log(`${base}${path} -> ${out}`);
