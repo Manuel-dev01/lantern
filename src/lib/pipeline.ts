@@ -6,7 +6,8 @@ import {
   writeGift,
 } from "./gifts.ts";
 import { listBlobs, mirrorToBlob } from "./providers/blob.ts";
-import { parseGlbBounds, spawnFromBounds } from "./providers/glb.ts";
+import { parseGlbBounds, placeObjects, spawnFromBounds } from "./providers/glb.ts";
+import { createTripoClient } from "./providers/tripo.ts";
 import {
   type GenerateWorldResult,
   getWorld,
@@ -65,8 +66,7 @@ export async function advance(gift: Gift): Promise<AdvanceResult> {
       case "world_mirroring":
         return await mirrorWorld(gift);
       case "objects_generating":
-        // Slice 4 fills this in. Until then a world with no objects is done.
-        return await settle(gift, "ready");
+        return await buildObjects(gift);
       default:
         return { gift, changed: false };
     }
@@ -253,4 +253,155 @@ async function mirrorWorld(gift: Gift): Promise<AdvanceResult> {
   };
 
   return await settle(gift, "objects_generating");
+}
+
+/**
+ * Low-poly is not optional.
+ *
+ * These load in a browser beside a splat world that is already tens of
+ * megabytes, so a dense mesh is not a quality choice, it is a broken page.
+ */
+const TRIPO_MODEL = "P1-20260311";
+
+/** The LLM is asked for three to six; this is the hard ceiling on credits and time. */
+const MAX_OBJECTS = 6;
+
+/** Statuses Tripo will not move on from. */
+const TRIPO_DEAD = ["failed", "cancelled", "banned", "expired", "unknown"];
+
+/**
+ * Turn the object list into things standing in the room.
+ *
+ * Same rule as every other stage: one bounded unit of work per call, every
+ * step idempotent, because polling means any step may run twice.
+ *
+ *   1. nothing started   -> create every task at once, so Tripo runs them in
+ *                           parallel on its machines rather than ours
+ *   2. tasks outstanding -> poll, and mirror the first that has finished
+ *   3. nothing left      -> place them and open the gift
+ *
+ * A failed object is recorded and skipped. Four of five remembered things is
+ * still a gift; only a failed *world* fails the gift.
+ */
+async function buildObjects(gift: Gift): Promise<AdvanceResult> {
+  const specs = (gift.objects ?? []).slice(0, MAX_OBJECTS);
+
+  // Nothing to build: a hand-authored world, or an LLM that returned nothing.
+  if (!specs.length) return await settle(gift, "ready");
+
+  const client = createTripoClient();
+
+  // ---- 1. start everything that has not been started ----------------------
+  const unstarted = specs.filter((spec) => !spec.taskId && !spec.error);
+  if (unstarted.length) {
+    // Checked once, before spending anything. An empty balance otherwise fails
+    // each object separately and delivers an empty room with no explanation.
+    const balance = await client.getBalance();
+    if (!balance.balance) {
+      throw new Error(
+        "Tripo has no credits, so none of the objects can be made. " +
+          "Top up at platform.tripo3d.ai and retry this gift.",
+      );
+    }
+
+    await Promise.all(
+      unstarted.map(async (spec) => {
+        try {
+          spec.taskId = await client.textToModel({
+            prompt: spec.prompt,
+            model: TRIPO_MODEL,
+            smart_low_poly: true,
+            texture: true,
+          });
+        } catch (err) {
+          spec.error = err instanceof Error ? err.message : String(err);
+        }
+      }),
+    );
+
+    gift.objects = specs;
+    await writeGift(gift);
+    return { gift, changed: true };
+  }
+
+  // ---- 2. mirror the first task that has finished -------------------------
+  for (const spec of specs) {
+    if (!spec.taskId || spec.error || spec.modelUrl) continue;
+
+    const task = await client.getTask(spec.taskId);
+
+    if (TRIPO_DEAD.includes(task.status)) {
+      spec.error = task.error_msg ?? `Tripo task ${task.status}.`;
+      gift.objects = specs;
+      await writeGift(gift);
+      return { gift, changed: true };
+    }
+
+    if (task.status !== "success") {
+      // Queued or running. Nothing changed, so the client keeps polling.
+      return { gift, changed: false };
+    }
+
+    const downloaded = await client.downloadModel(task);
+    if (!downloaded) {
+      spec.error = "Tripo finished with no downloadable model.";
+    } else {
+      // model_url dies about five minutes after the task completes, so the
+      // bytes are copied now and only our own URL is ever stored.
+      const filename = `object-${spec.taskId}.glb`;
+      const mirrored = await mirrorToBlob(downloaded.url, giftAssetPath(gift.id, filename));
+      spec.modelUrl = assetHref(gift, filename);
+
+      // Measured here, from the bytes already in hand. Placement then never
+      // has to pull the model back out of the store to learn its size.
+      const measured = parseGlbBounds(mirrored.data);
+      if (measured) spec.meshBounds = { min: measured.min, max: measured.max };
+    }
+
+    gift.objects = specs;
+    await writeGift(gift);
+    return { gift, changed: true };
+  }
+
+  // ---- 3. place them and open the gift ------------------------------------
+  const ready = specs.filter((spec) => spec.modelUrl && spec.meshBounds);
+
+  if (ready.length && gift.world && gift.bounds) {
+    const placements = placeObjects(
+      gift.bounds,
+      ready.map((spec) => boundsOf(spec.meshBounds!)),
+    );
+
+    gift.world.objects = ready.map((spec, i) => ({
+      id: spec.taskId!,
+      modelUrl: spec.modelUrl!,
+      position: placements[i].position,
+      scale: placements[i].scale,
+      // The plain name reads better under an object than the prompt that
+      // produced it: "the enamel cup", not a paragraph of model direction.
+      caption: spec.name ?? spec.prompt,
+    }));
+  }
+
+  return await settle(gift, "ready");
+}
+
+/** The stored min/max, widened back into the shape the placer expects. */
+function boundsOf(b: { min: [number, number, number]; max: [number, number, number] }) {
+  return {
+    min: b.min,
+    max: b.max,
+    size: [b.max[0] - b.min[0], b.max[1] - b.min[1], b.max[2] - b.min[2]] as [
+      number,
+      number,
+      number,
+    ],
+    center: [
+      (b.min[0] + b.max[0]) / 2,
+      (b.min[1] + b.max[1]) / 2,
+      (b.min[2] + b.max[2]) / 2,
+    ] as [number, number, number],
+    vertices: 0,
+    triangles: 0,
+  };
 }

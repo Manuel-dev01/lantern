@@ -170,3 +170,68 @@ export function placeInWorld(
     scale,
   };
 }
+
+/**
+ * Where a gift's objects go, for worlds that are mostly window.
+ *
+ * `placeInWorld` above derives everything from the bounding box, which is only
+ * safe in a tight interior like the hero bedroom. A Marble collider takes in
+ * whatever is visible through a window or an open wall, so in the generated
+ * gifts - 11 and 13 units deep against that bedroom's 3.65 - the box centre is
+ * a point outdoors and its height is the height of the sky. Objects placed
+ * from it land in the garden at the size of furniture.
+ *
+ * So this works from the origin instead, exactly as `spawnFromBounds` does.
+ * Marble builds a world around the camera that captured it, which means the
+ * origin is indoors, at eye height, on open floor that someone was standing on.
+ *
+ * Objects are laid in a shallow arc in front of that spot, so they are in view
+ * the moment the gift opens rather than behind the visitor's head.
+ */
+export function placeObjects(
+  world: { min: Vec3; max: Vec3 },
+  objects: GlbBounds[],
+  { heightFraction = 0.22 }: { heightFraction?: number } = {},
+): Array<{ position: Vec3; scale: number }> {
+  const floorY = world.min[1];
+  const originInside = [0, 1, 2].every((i) => world.min[i] <= 0 && world.max[i] >= 0);
+
+  // The drop from where the camera stood to the lowest geometry. In a world
+  // that is mostly outdoors this is still the height of a person, where the
+  // full box height would be the height of the sky.
+  const eyeHeight = originInside
+    ? Math.max(-floorY, 1e-3)
+    : Math.max((world.max[1] - floorY) * 0.65, 1e-3);
+
+  const centreX = originInside ? 0 : (world.min[0] + world.max[0]) / 2;
+  const centreZ = originInside ? 0 : (world.min[2] + world.max[2]) / 2;
+
+  const count = objects.length;
+
+  return objects.map((object, index) => {
+    const objectHeight = object.size[1] || 1;
+    // A keepsake, not furniture: roughly 0.22 of eye height is 35cm for a
+    // person. Tripo normalises every model to a unit box, so this is the only
+    // thing deciding how big it reads.
+    const scale = (eyeHeight * heightFraction) / objectHeight;
+
+    // Fan them across the view rather than stacking them on one spot. A single
+    // object sits straight ahead; more spread out either side of it.
+    const spread = count > 1 ? (index / (count - 1) - 0.5) * (Math.PI / 2) : 0;
+    // Staggered depth so they do not form a flat row.
+    const distance = eyeHeight * (1.6 + (index % 2) * 0.5);
+
+    return {
+      position: [
+        centreX + Math.sin(spread) * distance,
+        // The model is centred on its own origin, so lift it by its own
+        // underside rather than burying it to the waist.
+        floorY - object.min[1] * scale,
+        // -Z is the direction the capture faced, and the way the player looks
+        // on arrival.
+        centreZ - Math.cos(spread) * distance,
+      ] as Vec3,
+      scale,
+    };
+  });
+}

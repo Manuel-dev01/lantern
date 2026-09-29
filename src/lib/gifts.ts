@@ -30,6 +30,12 @@ export interface GiftObjectSpec {
   taskId?: string;
   /** Our own URL, once mirrored. Never a provider URL. */
   modelUrl?: string;
+  /**
+   * The mesh's own bounding box, measured from the bytes as they were
+   * mirrored. Kept so placement never has to download the model back out of
+   * the store to find out how big it is.
+   */
+  meshBounds?: { min: [number, number, number]; max: [number, number, number] };
   error?: string;
 }
 

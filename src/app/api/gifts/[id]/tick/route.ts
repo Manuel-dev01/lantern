@@ -50,11 +50,19 @@ export async function POST(request: Request, ctx: RouteContext<"/api/gifts/[id]/
 
   const { gift: updated, changed } = await advance(gift);
 
+  // Counted rather than guessed: a stage name alone cannot tell a visitor
+  // whether anything is happening over four minutes of object generation.
+  const objects = updated.objects ?? [];
+  const objectsTotal = objects.length;
+  const objectsDone = objects.filter((o) => o.modelUrl || o.error).length;
+
   return Response.json({
     id: updated.id,
     stage: updated.stage,
     label: stageLabel(updated.stage),
     changed,
+    objectsDone,
+    objectsTotal,
     error: updated.error,
     ready: updated.stage === "ready",
   });

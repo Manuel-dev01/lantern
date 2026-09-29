@@ -32,6 +32,8 @@ export default function GiftView({ gift }: { gift: Gift }) {
   const router = useRouter();
   const [stage, setStage] = useState(gift.stage);
   const [error, setError] = useState(gift.error);
+  const [made, setMade] = useState(0);
+  const [toMake, setToMake] = useState(gift.objects?.length ?? 0);
 
   const done = stage === "ready" || stage === "failed";
 
@@ -47,11 +49,15 @@ export default function GiftView({ gift }: { gift: Gift }) {
           stage: Gift["stage"];
           error?: string;
           ready: boolean;
+          objectsDone?: number;
+          objectsTotal?: number;
         };
         if (cancelled) return;
 
         setStage(data.stage);
         setError(data.error);
+        if (typeof data.objectsDone === "number") setMade(data.objectsDone);
+        if (typeof data.objectsTotal === "number") setToMake(data.objectsTotal);
 
         // The finished world lives on the server document, not in this
         // response, so let the server component hand it down.
@@ -97,6 +103,12 @@ export default function GiftView({ gift }: { gift: Gift }) {
           {stage === "failed"
             ? "something went wrong"
             : `${stageLabel(stage)}…`}
+          {/* Counting the things is the difference between a wait that is
+              happening and a wait that has hung. Objects take the longest of
+              any stage, so this is where it matters most. */}
+          {stage === "objects_generating" && toMake > 0
+            ? ` ${made} of ${toMake}`
+            : ""}
         </p>
 
         {stage === "failed" && error ? (
