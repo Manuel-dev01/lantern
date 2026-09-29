@@ -21,14 +21,6 @@ const JUMP_SPEED = 2.6;
 const RADIUS = 0.22;
 /** Below this, a surface counts as floor rather than wall. */
 const GROUND_NORMAL_Y = 0.35;
-/**
- * How far up the player will step, in eye heights.
- *
- * 0.3 of an eye height is about 48cm for a person - generous for a kerb or a
- * stair, and short of the ~75cm table that was putting the camera through the
- * ceiling. Anything taller blocks rather than lifts.
- */
-const STEP_HEIGHT = 0.3;
 const PITCH_LIMIT = Math.PI / 2 - 0.05;
 /** Pixels from the stick's anchor point that count as full tilt. */
 const STICK_RADIUS = 56;
@@ -49,6 +41,8 @@ export interface FirstPersonOptions {
   lookAt: THREE.Vector3;
   /** Lowest point of the world; used to recover if the player falls out. */
   floorY: number;
+  /** Highest point of the world. The eye is never allowed above it. */
+  ceilingY?: number;
 }
 
 export class FirstPersonController {
@@ -56,6 +50,7 @@ export class FirstPersonController {
   private readonly domElement: HTMLElement;
   private readonly eyeHeight: number;
   private readonly floorY: number;
+  private readonly ceilingY: number | null;
   private readonly spawn: THREE.Vector3;
 
   private bvh: MeshBVH | null = null;
@@ -114,12 +109,13 @@ export class FirstPersonController {
   constructor(
     camera: THREE.PerspectiveCamera,
     domElement: HTMLElement,
-    { eyeHeight, spawn, lookAt, floorY }: FirstPersonOptions,
+    { eyeHeight, spawn, lookAt, floorY, ceilingY }: FirstPersonOptions,
   ) {
     this.camera = camera;
     this.domElement = domElement;
     this.eyeHeight = eyeHeight;
     this.floorY = floorY;
+    this.ceilingY = ceilingY ?? null;
     this.spawn = spawn.clone();
     this.position.copy(spawn);
 
@@ -285,6 +281,18 @@ export class FirstPersonController {
     return this.bvh !== null && !this.provisional;
   }
 
+  /**
+   * What the player is standing on, for the debug readout.
+   *
+   * Worth its own line: a walk across the bounding-box stand-in looks exactly
+   * like a walk across a real floor in the numbers, and mistaking one for the
+   * other makes a collision test prove nothing.
+   */
+  get groundKind(): "none" | "box" | "mesh" {
+    if (!this.bvh) return "none";
+    return this.provisional ? "box" : "mesh";
+  }
+
   update(deltaMs: number) {
     // Clamp so an alt-tab or a slow first frame cannot teleport the player
     // through a wall on resume.
@@ -390,11 +398,6 @@ export class FirstPersonController {
 
     let landed = false;
 
-    // The lowest point of the capsule when this resolve began. Anything
-    // standable has to be within a step of it.
-    const feet = this.segment.end.y - radius;
-    const step = STEP_HEIGHT * scale;
-
     bvh.shapecast({
       intersectsBounds: (box) => box.intersectsBox(this.box),
       intersectsTriangle: (tri) => {
@@ -405,29 +408,16 @@ export class FirstPersonController {
         );
         if (distance < radius) {
           const depth = radius - distance;
+          // Pushed straight back out along the shortest separating direction.
+          //
+          // Do not be tempted to redirect this - an earlier attempt flattened
+          // upward pushes to horizontal to stop the player climbing furniture,
+          // and a table top is dozens of triangles, every one of which then
+          // shoved sideways. They compounded into a single hard push through
+          // the nearest wall. Climbing is dealt with after the fact, by
+          // clamping height, not by lying about which way a surface faces.
           const direction = this.capsulePoint.sub(this.triPoint).normalize();
-
-          if (direction.y > GROUND_NORMAL_Y) {
-            // An upward push is only a floor if it is near the feet. A table
-            // top is a horizontal surface too, and letting one lift the capsule
-            // walks the player onto the furniture - which in a room 1.75 units
-            // tall puts the camera through the ceiling.
-            //
-            // Checking the contact height rather than how far a single
-            // substep rose is what matters: physics runs at 120Hz, so creeping
-            // up an edge gains a fraction of a millimetre per step and any
-            // per-step threshold is never reached.
-            if (this.triPoint.y - feet > step) {
-              // Too high to stand on, so it blocks instead. Flatten the push
-              // to horizontal and let it act as a wall.
-              direction.y = 0;
-              if (direction.lengthSq() < 1e-8) return false;
-              direction.normalize();
-            } else {
-              landed = true;
-            }
-          }
-
+          if (direction.y > GROUND_NORMAL_Y) landed = true;
           this.segment.start.addScaledVector(direction, depth);
           this.segment.end.addScaledVector(direction, depth);
         }
@@ -436,6 +426,21 @@ export class FirstPersonController {
     });
 
     this.position.copy(this.segment.start);
+
+    // Never let the eye enter the ceiling.
+    //
+    // This is what the climbing actually broke. In a world whose floor is at
+    // -1.109 and ceiling at 0.643, walking onto a table lifts the eye to 0.71
+    // - inside the roof, looking at black. Capping the height means the player
+    // can still stand on the table, but ducks under the ceiling instead of
+    // going through it, which is survivable where the black screen was not.
+    if (this.ceilingY !== null) {
+      const cap = this.ceilingY - radius * 0.5;
+      if (this.position.y > cap) {
+        this.position.y = cap;
+        if (this.velocity.y > 0) this.velocity.y = 0;
+      }
+    }
 
     if (landed) {
       this.onGround = true;

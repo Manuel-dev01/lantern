@@ -198,6 +198,7 @@ export default function WorldViewer({ world }: { world: World }) {
       player = new FirstPersonController(camera, renderer.domElement, {
         eyeHeight,
         floorY,
+        ceilingY: boundsMax[1],
         spawn: new THREE.Vector3().fromArray(world.spawn ?? [0, 1.6, 3]),
         lookAt: new THREE.Vector3().fromArray(
           world.target ?? [
@@ -399,7 +400,7 @@ export default function WorldViewer({ world }: { world: World }) {
         hudRef.current.textContent =
           `pos ${p.x.toFixed(2)} ${p.y.toFixed(2)} ${p.z.toFixed(2)}  ` +
           `dir ${dir.x.toFixed(2)} ${dir.y.toFixed(2)} ${dir.z.toFixed(2)}  ` +
-          `${player.grounded ? "grounded" : "falling"}  ` +
+          `${player.grounded ? "grounded" : "falling"} on ${player.groundKind}  ` +
           `splats ${!splat ? "none" : splat.isInitialized ? "init" : "pending"} ` +
           // Which level is actually on screen right now, which changes as the
           // ladder climbs.
