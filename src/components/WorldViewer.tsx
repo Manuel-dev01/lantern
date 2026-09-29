@@ -268,6 +268,38 @@ export default function WorldViewer({ world }: { world: World }) {
     let splat: SplatMesh | null = null;
     /** Which level is actually on screen, for the debug readout. */
     let loadedUrl: string | null = null;
+    /**
+     * How many of the gift's objects are in the scene.
+     *
+     * On the HUD because "no object visible" has two completely different
+     * causes - still downloading, or placed somewhere you cannot see it - and
+     * a screenshot cannot tell them apart. Guessing wrong cost a day.
+     */
+    let objectsIn = 0;
+    let objectsWanted = 0;
+    /** Everything dropped onto the floor, so a late collider can re-seat them. */
+    const placed: THREE.Object3D[] = [];
+
+    /**
+     * Rest an object on the floor that is actually under it.
+     *
+     * The server places objects on `bounds.min.y`, the lowest point of the
+     * whole collider, which is not the floor - the same "the bounding box is
+     * not the room" trap that put the camera outdoors and the objects through
+     * a wall. Here it buries them: an object sunk below the boards is drawn,
+     * but the occluder's depth hides it, so the room looks empty for the third
+     * distinct reason in a row.
+     *
+     * Does nothing until the real collider is in, and is safe to run twice.
+     */
+    function restOnFloor(node: THREE.Object3D) {
+      const groundY = player?.groundHeightAt(node.position.x, node.position.z);
+      if (groundY == null) return;
+
+      const box = new THREE.Box3().setFromObject(node);
+      if (box.isEmpty()) return;
+      node.position.y += groundY - box.min.y;
+    }
 
     /** Build a splat from bytes and put it in the scene, replacing any previous one. */
     function install(bytes: Uint8Array, url: string) {
@@ -388,6 +420,11 @@ export default function WorldViewer({ world }: { world: World }) {
         const collision = mergeSceneGeometry(gltf.scene);
         if (collision) player?.setCollider(collision);
         setGround(true);
+
+        // Objects that arrived before the collider were placed on the
+        // bounding box's floor, which is not the floor. Now there is a real
+        // surface to sit on, they are re-seated on it.
+        for (const node of placed) restOnFloor(node);
         },
         (event: ProgressEvent) => {
           if (disposed || !event.lengthComputable || !event.total) return;
@@ -411,6 +448,7 @@ export default function WorldViewer({ world }: { world: World }) {
      */
     async function loadGiftObjects() {
       const gltfLoader = new GLTFLoader();
+      objectsWanted = (world.objects ?? []).length;
 
       for (const obj of world.objects ?? []) {
         if (disposed) return;
@@ -445,6 +483,9 @@ export default function WorldViewer({ world }: { world: World }) {
         });
         gltf.scene.userData.giftObject = obj;
         scene.add(gltf.scene);
+        placed.push(gltf.scene);
+        restOnFloor(gltf.scene);
+        objectsIn++;
       }
     }
 
@@ -476,7 +517,8 @@ export default function WorldViewer({ world }: { world: World }) {
           `splats ${!splat ? "none" : splat.isInitialized ? "init" : "pending"} ` +
           // Which level is actually on screen right now, which changes as the
           // ladder climbs.
-          `${(loadedUrl ?? ladder[0]).split("/").pop()}`;
+          `${(loadedUrl ?? ladder[0]).split("/").pop()}  ` +
+          `objects ${objectsIn}/${objectsWanted}`;
       }
     });
 

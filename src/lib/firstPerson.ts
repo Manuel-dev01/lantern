@@ -271,6 +271,31 @@ export class FirstPersonController {
     this.provisional = true;
   }
 
+  /**
+   * The height of the real floor under a point, or null if nothing is there.
+   *
+   * Objects are positioned on the server from the world's bounding box, whose
+   * lowest point is not the floor: a Marble collider reaches whatever is
+   * visible through a window, so `min.y` can sit well below the boards the
+   * visitor is standing on, and an object resting on it is buried - drawn,
+   * but hidden behind the occluder's depth.
+   *
+   * The BVH built for walking answers this exactly, so the viewer drops each
+   * object onto the surface the player would actually stand on. Only
+   * meaningful once the real collider has landed; the provisional box would
+   * just hand back its own flat bottom.
+   */
+  groundHeightAt(x: number, z: number, from = 1e4): number | null {
+    if (!this.bvh || this.provisional) return null;
+
+    const ray = new THREE.Ray(
+      new THREE.Vector3(x, from, z),
+      new THREE.Vector3(0, -1, 0),
+    );
+    const hit = this.bvh.raycastFirst(ray, THREE.DoubleSide);
+    return hit ? hit.point.y : null;
+  }
+
   /** False while there is nothing at all to stand on, so gravity is held off. */
   get hasGround(): boolean {
     return this.bvh !== null;
