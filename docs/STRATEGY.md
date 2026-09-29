@@ -864,6 +864,34 @@ open floor - and lays the objects in a shallow arc in front of it, so they are i
 moment the gift opens. Mesh bounds are measured from the bytes as they are mirrored and kept on
 the gift, so placement never pulls a model back out of the store to learn its size.
 
+### The manifest was right and the room was empty
+
+The first four objects were built, mirrored, measured and placed, the gift document was
+correct in every field - and the room opened with nothing in it.
+
+`placeObjects` fans objects 1.6 to 2.1 eye heights in front of the spawn. The Lagos kitchen has
+**1.07 eye heights** before the back wall: it is 5.5 units wide and 2.4 deep, and the origin
+sits only 1.02 from the far side. All four objects landed *outside the collider*, behind the
+wall, invisible.
+
+Placement now clips the arc to the bounding box with a margin for the object's own width. The
+stagger that keeps them from forming a flat row is applied *within* the depth that exists
+rather than at a fixed offset, or it collapses the moment the clamp binds.
+
+Two things worth carrying forward:
+
+- **This is the third time the bounding box has lied**, after the camera in the garden and the
+  objects at the size of furniture. The box is a hard outer limit and nothing more. Clipping to
+  it is safe only because clipping can pull an object *closer* to the spawn and never push it
+  out - it cannot invent a new way to be outside.
+- **A correct manifest is not a verified feature.** Every value on that document checked out;
+  the room was still empty. Only the screenshot found it, and only from the spawn - the orbit
+  view showed a perfectly good kitchen with the bug fully intact.
+
+`scripts/replace-objects.mts` re-places an existing gift from the bounds already on its
+document, so gifts made before the fix are repaired without regenerating a model or spending a
+credit.
+
 ### Cost and timing, measured
 
 A four-object gift costs **360 Tripo credits** - about 90 per textured `P1-20260311` object,
