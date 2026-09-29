@@ -5,6 +5,7 @@ import * as THREE from "three";
 import { SparkRenderer, SplatMesh, SplatFileType } from "@sparkjsdev/spark";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import type { GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { World } from "@/lib/types";
 import {
   FirstPersonController,
@@ -87,6 +88,40 @@ async function fetchWithProgress(
     offset += chunk.length;
   }
   return out;
+}
+
+/**
+ * The same download, but not given up on at the first dropped connection.
+ *
+ * The splat is the one asset with no fallback: if it fails the visitor gets
+ * "could not open this world" and nothing else, however well everything else
+ * loaded. A reset partway through a megabyte is exactly the kind of thing
+ * that should be retried rather than shown to someone who was sent a gift.
+ *
+ * Only network failures are retried. A 404 or a 500 will say the same thing
+ * the second time.
+ */
+async function fetchWorldAsset(
+  url: string,
+  signal: AbortSignal,
+  onProgress: (fraction: number) => void,
+): Promise<Uint8Array> {
+  let last: unknown;
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await fetchWithProgress(url, signal, onProgress);
+    } catch (err) {
+      if (signal.aborted) throw err;
+      // fetchWithProgress throws "<status> <text> loading the world" for a
+      // real HTTP response, which repeating will not improve.
+      if (err instanceof Error && /^\d{3} /.test(err.message)) throw err;
+      last = err;
+      await new Promise((resolve) => setTimeout(resolve, 600 * 2 ** attempt));
+    }
+  }
+
+  throw last;
 }
 
 export default function WorldViewer({ world }: { world: World }) {
@@ -258,7 +293,7 @@ export default function WorldViewer({ world }: { world: World }) {
       try {
         for (const [index, url] of ladder.entries()) {
           const upgrade = index > 0;
-          const bytes = await fetchWithProgress(url, abort.signal, (fraction) => {
+          const bytes = await fetchWorldAsset(url, abort.signal, (fraction) => {
             if (disposed) return;
             // The first load owns the progress line; an upgrade happens behind
             // a world the visitor is already standing in and must not reopen
@@ -282,6 +317,16 @@ export default function WorldViewer({ world }: { world: World }) {
           loadedUrl = url;
           setStatus("ready");
           if (upgrade) setUpgrading(null);
+
+          // Only once the room is actually on screen. Starting these at mount
+          // put six multi-megabyte downloads in flight at once - the splat,
+          // the collider and four objects - against the six connections a
+          // browser allows a single host, and the splat is the one that
+          // cannot fail. See loadGiftObjects.
+          if (!upgrade) {
+            loadCollider();
+            void loadGiftObjects();
+          }
         }
       } catch (err) {
         if (disposed || abort.signal.aborted) return;
@@ -311,7 +356,8 @@ export default function WorldViewer({ world }: { world: World }) {
     // the same queue as the splats, where renderOrder can place it after them:
     //
     //   splats (0) -> occluder (1, depth only) -> objects (2)
-    if (world.colliderUrl && !noCollider) {
+    function loadCollider() {
+      if (!world.colliderUrl || noCollider) return;
       new GLTFLoader().load(
         world.colliderUrl,
         (gltf) => {
@@ -350,15 +396,41 @@ export default function WorldViewer({ world }: { world: World }) {
       );
     }
 
-    // Tripo-generated gift objects.
-    const gltfLoader = new GLTFLoader();
-    for (const obj of world.objects ?? []) {
-      gltfLoader.load(obj.modelUrl, (gltf) => {
+    /**
+     * The remembered things - Tripo's meshes - one at a time.
+     *
+     * These used to start the instant the viewer mounted, which put the splat,
+     * the collider and every object in flight together: for one four-object
+     * gift that is 15 MB across six requests, against the six connections a
+     * browser will open to a single host. The splat is the only asset with no
+     * fallback, so it is the one that must not be competed with.
+     *
+     * Sequential, because nothing waits on these - an object that arrives late
+     * simply appears in the room - and because a queue of one keeps a slow
+     * connection moving instead of stalling six transfers at once.
+     */
+    async function loadGiftObjects() {
+      const gltfLoader = new GLTFLoader();
+
+      for (const obj of world.objects ?? []) {
         if (disposed) return;
+
+        let gltf: GLTF;
+        try {
+          gltf = await gltfLoader.loadAsync(obj.modelUrl);
+        } catch (err) {
+          // One missing thing is not a broken gift, so this does not touch the
+          // world's status. It is logged rather than swallowed: a silent
+          // failure here is indistinguishable from an object that was never
+          // generated, and that ambiguity cost a day.
+          console.warn(`Lantern: could not load "${obj.caption ?? obj.modelUrl}"`, err);
+          continue;
+        }
+        if (disposed) return;
+
         gltf.scene.position.fromArray(obj.position);
         gltf.scene.rotation.y = obj.rotationY ?? 0;
-        const s = obj.scale ?? 1;
-        gltf.scene.scale.setScalar(s);
+        gltf.scene.scale.setScalar(obj.scale ?? 1);
         // Join the same queue as the splats and the occluder, drawn after
         // both, so the occluder's depth is already laid down to test against.
         gltf.scene.traverse((node) => {
@@ -373,7 +445,7 @@ export default function WorldViewer({ world }: { world: World }) {
         });
         gltf.scene.userData.giftObject = obj;
         scene.add(gltf.scene);
-      });
+      }
     }
 
     const onResize = () => {
