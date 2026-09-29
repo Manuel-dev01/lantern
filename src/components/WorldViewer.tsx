@@ -47,9 +47,13 @@ function lodLadder(
       ?.saveData === true;
   if (saveData) return [lods[available[0]]];
 
-  const first = available[0];
-  const best = available[available.length - 1];
-  return first === best ? [lods[first]] : [lods[first], lods[best]];
+  // Every rung, not just the two ends.
+  //
+  // Going straight from the smallest to the best means jumping 1 MB to 23 MB
+  // in this gift, so the room stays visibly blurry for as long as that takes
+  // and there is nothing in between. 500k is 5 MB and sharpens the room in a
+  // fraction of the time, with full_res still arriving behind it.
+  return available.map((level) => lods[level]);
 }
 
 /**
@@ -325,6 +329,11 @@ export default function WorldViewer({ world }: { world: World }) {
       try {
         for (const [index, url] of ladder.entries()) {
           const upgrade = index > 0;
+          // Announce the upgrade before a byte arrives. Blob serves these
+          // brotli-encoded and chunked, so there is no Content-Length and the
+          // progress callback never fires - which left the room silently
+          // sharpening with nothing on screen to say so.
+          if (upgrade) setUpgrading(0);
           const bytes = await fetchWorldAsset(url, abort.signal, (fraction) => {
             if (disposed) return;
             // The first load owns the progress line; an upgrade happens behind
@@ -355,9 +364,17 @@ export default function WorldViewer({ world }: { world: World }) {
           // the collider and four objects - against the six connections a
           // browser allows a single host, and the splat is the one that
           // cannot fail. See loadGiftObjects.
+          //
+          // The objects are *awaited*, before any sharper splat is fetched.
+          // The upgrade is 23 MB in this gift against 10 MB of objects, so
+          // running them together starves the things the gift is actually
+          // about: the room read "objects 0/4" for minutes while a cosmetic
+          // upgrade had the connection. A slightly soft room containing the
+          // frying pan beats a crisp empty one.
           if (!upgrade) {
             loadCollider();
-            void loadGiftObjects();
+            await loadGiftObjects();
+            if (disposed) return;
           }
         }
       } catch (err) {
@@ -583,7 +600,7 @@ export default function WorldViewer({ world }: { world: World }) {
       {status === "ready" && upgrading !== null ? (
         <div className="pointer-events-none absolute inset-x-0 top-4 grid place-items-center">
           <p className="text-[11px] tracking-wide text-white/30">
-            sharpening… {upgrading}%
+            {upgrading > 0 ? `sharpening… ${upgrading}%` : "sharpening…"}
           </p>
         </div>
       ) : null}
