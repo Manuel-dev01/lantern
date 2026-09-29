@@ -209,11 +209,16 @@ export function placeObjects(
   const count = objects.length;
 
   return objects.map((object, index) => {
-    const objectHeight = object.size[1] || 1;
-    // A keepsake, not furniture: roughly 0.22 of eye height is 35cm for a
-    // person. Tripo normalises every model to a unit box, so this is the only
-    // thing deciding how big it reads.
-    const scale = (eyeHeight * heightFraction) / objectHeight;
+    // Scale by the largest dimension, never by height.
+    //
+    // Tripo normalises the bounding *box*, not the height, so a flat object
+    // has a tiny height and dividing by it inflates the thing enormously: a
+    // frying pan came out at scale 1.06 - over a metre across - beside a
+    // kerosene stove at 0.24, because the pan is wide and shallow. Largest
+    // dimension is what "something you could pick up" actually means.
+    const longest = Math.max(object.size[0], object.size[1], object.size[2]) || 1;
+    // Roughly 0.22 of eye height is a 35cm object for a person.
+    const scale = (eyeHeight * heightFraction) / longest;
 
     // Fan them across the view rather than stacking them on one spot. A single
     // object sits straight ahead; more spread out either side of it.
