@@ -36,6 +36,8 @@ export interface GiftObjectSpec {
    * the store to find out how big it is.
    */
   meshBounds?: { min: [number, number, number]; max: [number, number, number] };
+  /** Creation attempts so far. Tripo rate-limits, and a retry is not a failure. */
+  attempts?: number;
   error?: string;
 }
 

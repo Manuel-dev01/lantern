@@ -270,6 +270,25 @@ const MAX_OBJECTS = 6;
 const TRIPO_DEAD = ["failed", "cancelled", "banned", "expired", "unknown"];
 
 /**
+ * How many times to re-offer an object that was rate-limited.
+ *
+ * Bounded so a permanently throttled account cannot keep a gift on the waiting
+ * screen for ever - at that point the honest answer is a room with fewer
+ * things in it.
+ */
+const MAX_ATTEMPTS = 12;
+
+/** Tripo's "too many at once", which is worth retrying rather than recording. */
+function isRateLimited(message: string): boolean {
+  return (
+    message.includes("code=2000") ||
+    /exceeded the limit/i.test(message) ||
+    /rate.?limit/i.test(message) ||
+    message.includes("429")
+  );
+}
+
+/**
  * Turn the object list into things standing in the room.
  *
  * Same rule as every other stage: one bounded unit of work per call, every
@@ -291,9 +310,15 @@ async function buildObjects(gift: Gift): Promise<AdvanceResult> {
 
   const client = createTripoClient();
 
-  // ---- 1. start everything that has not been started ----------------------
-  const unstarted = specs.filter((spec) => !spec.taskId && !spec.error);
-  if (unstarted.length) {
+  // ---- 1. start the next object that has not been started -----------------
+  //
+  // One per tick, not all at once. Tripo caps concurrent generation, and
+  // firing four together failed three of them with "you have exceeded the
+  // limit of generation". Ticks are seconds apart and a model takes minutes,
+  // so staggered starts still overlap almost entirely - the parallelism is
+  // kept, the burst is not.
+  const next = specs.find((spec) => !spec.taskId && !spec.error);
+  if (next) {
     // Checked once, before spending anything. An empty balance otherwise fails
     // each object separately and delivers an empty room with no explanation.
     const balance = await client.getBalance();
@@ -304,20 +329,27 @@ async function buildObjects(gift: Gift): Promise<AdvanceResult> {
       );
     }
 
-    await Promise.all(
-      unstarted.map(async (spec) => {
-        try {
-          spec.taskId = await client.textToModel({
-            prompt: spec.prompt,
-            model: TRIPO_MODEL,
-            smart_low_poly: true,
-            texture: true,
-          });
-        } catch (err) {
-          spec.error = err instanceof Error ? err.message : String(err);
-        }
-      }),
-    );
+    next.attempts = (next.attempts ?? 0) + 1;
+
+    try {
+      next.taskId = await client.textToModel({
+        prompt: next.prompt,
+        model: TRIPO_MODEL,
+        smart_low_poly: true,
+        texture: true,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+
+      // A rate limit is a "come back shortly", not a failure. Recording it as
+      // one is what emptied three quarters of the first real gift. Leaving the
+      // spec unstarted means the next tick simply tries again.
+      if (isRateLimited(message) && next.attempts < MAX_ATTEMPTS) {
+        await writeGift(gift);
+        return { gift, changed: false };
+      }
+      next.error = message;
+    }
 
     gift.objects = specs;
     await writeGift(gift);

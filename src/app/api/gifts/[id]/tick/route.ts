@@ -39,6 +39,21 @@ export async function POST(request: Request, ctx: RouteContext<"/api/gifts/[id]/
     gift.error = undefined;
   }
 
+  // A finished gift can still be missing things: Tripo rate-limits, and an
+  // object that lost that race left an error behind rather than a model.
+  // Clearing those and going back sends only the missing ones for another go -
+  // the world and the objects that did arrive are untouched and cost nothing.
+  if (gift.stage === "ready" && params.has("retry")) {
+    const missing = (gift.objects ?? []).filter((o) => o.error && !o.modelUrl);
+    if (missing.length) {
+      for (const spec of missing) {
+        spec.error = undefined;
+        spec.attempts = 0;
+      }
+      gift.stage = "objects_generating";
+    }
+  }
+
   // Reassemble a finished gift's manifest from the assets already in the
   // store. No downloads and no credits: the mirroring stage asks the store
   // what exists and skips anything present. Needed whenever the manifest
