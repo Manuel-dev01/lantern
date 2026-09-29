@@ -823,3 +823,52 @@ because draft worlds offer no `150k`.
 
 A judge on a bad connection is a real scenario, and the first frame is what decides whether
 they stay.
+
+---
+
+## Phase 2, Slice 4 - the things in the room (Sep 29)
+
+Gifts now contain Tripo objects. A memory becomes a world *and* the remembered things standing
+in it, correctly occluded by the world's own geometry - which is the Tool Synergy claim, worth
+25% of both tool tracks, and until now demonstrated only by a rabbit I placed by hand.
+
+Verified end to end: *"Her kitchen in Lagos"* produced the blackened frying pan, the enamel
+bowl, the wooden spoon and the kerosene stove, all four built, mirrored and placed.
+
+### Three provider behaviours that are not in the docs
+
+**1. Tripo rate-limits concurrent generation.** Creating four tasks at once failed three of them
+with `code=2000: You have exceeded the limit of generation`. Objects are now started **one per
+tick**; ticks are seconds apart and a model takes minutes, so the starts still overlap almost
+entirely - the parallelism survives, the burst does not.
+
+**2. A rate limit is not a failure.** The first real gift opened three-quarters empty because
+that error was recorded as permanent. Retryable errors now leave the object unstarted so the
+next tick tries again, bounded at twelve attempts. `?retry=1` on a *finished* gift re-offers
+only the objects that are missing, leaving the world and the successful objects untouched.
+
+**3. Tripo normalises the bounding box, not the height.** Four objects that should all have been
+scale ~0.21 came out at 1.06, 0.60, 0.49 and 0.24 - the frying pan over a metre across, because
+a pan is wide and shallow and dividing by its height inflates it fivefold. **Scale by the
+longest dimension.** The rabbit hid this for a fortnight by being roughly as tall as it is wide.
+
+### Placement, again from the origin
+
+`placeInWorld` carries the bug that put the camera in the garden: it scales by the full
+bounding-box height and positions at the box centre, and a Marble collider takes in everything
+visible through a window. In an 11-unit open-sided world that centre is outdoors and that height
+is the height of the sky.
+
+`placeObjects` works from the origin instead - where Marble's camera stood, reliably indoors on
+open floor - and lays the objects in a shallow arc in front of it, so they are in view the
+moment the gift opens. Mesh bounds are measured from the bytes as they are mirrored and kept on
+the gift, so placement never pulls a model back out of the store to learn its size.
+
+### Cost and timing, measured
+
+A four-object gift costs **360 Tripo credits** - about 90 per textured `P1-20260311` object,
+against the 35-200 per *gift* I had estimated before measuring. Still not the constraint: 25,200
+credits remain, which is roughly seventy more full gifts. It takes about **20 ticks** after the
+world is done, so roughly four minutes start to finish. The wait screen counts them off - *"finding the things that mattered 2 of 4"* -
+because this is the longest stage and a number is the difference between a wait that is working
+and one that has hung.
