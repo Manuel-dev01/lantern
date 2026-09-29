@@ -223,20 +223,71 @@ export function placeObjects(
     // Fan them across the view rather than stacking them on one spot. A single
     // object sits straight ahead; more spread out either side of it.
     const spread = count > 1 ? (index / (count - 1) - 0.5) * (Math.PI / 2) : 0;
-    // Staggered depth so they do not form a flat row.
-    const distance = eyeHeight * (1.6 + (index % 2) * 0.5);
+    // -Z is the direction the capture faced, and the way the player looks on
+    // arrival.
+    const dirX = Math.sin(spread);
+    const dirZ = -Math.cos(spread);
+
+    // How far out the arc sits: what the room allows, not what the arc wants.
+    //
+    // Asking unconditionally is what put the first four objects through the
+    // back wall: the arc wanted 1.6 eye heights of clearance in a kitchen with
+    // 1.07, so every one landed outside the collider and the room opened
+    // empty. A room is not obliged to be deep in the direction it was
+    // photographed from - this one is 5.5 units wide and 2.4 deep.
+    const margin = (longest * scale) / 2 + eyeHeight * 0.15;
+    const far = Math.min(eyeHeight * 2.1, reachWithin(world, centreX, centreZ, dirX, dirZ, margin));
+    // Alternate near and far *within* that depth rather than at a fixed offset,
+    // so the stagger survives in a shallow room instead of collapsing into a
+    // flat row the moment the clamp binds.
+    const distance = index % 2 === 1 ? far : far * 0.78;
 
     return {
       position: [
-        centreX + Math.sin(spread) * distance,
+        centreX + dirX * distance,
         // The model is centred on its own origin, so lift it by its own
         // underside rather than burying it to the waist.
         floorY - object.min[1] * scale,
-        // -Z is the direction the capture faced, and the way the player looks
-        // on arrival.
-        centreZ - Math.cos(spread) * distance,
+        centreZ + dirZ * distance,
       ] as Vec3,
       scale,
     };
   });
+}
+
+/**
+ * How far a ray from the spawn can travel before it leaves the bounding box.
+ *
+ * A slab clip on X and Z only - height is handled by resting on the floor.
+ * `margin` keeps the object clear of the surface rather than half-buried in
+ * it, so it is the object's own half-width plus a little breathing room.
+ *
+ * Note what this does and does not promise. The bounding box is not the room:
+ * a collider takes in whatever is visible through a window, so staying inside
+ * the box does not guarantee staying indoors. But the box is a hard outer
+ * limit, and clipping to it can only ever pull an object closer to the spawn,
+ * never push it further out - so it fixes objects that were outside the world
+ * without being able to create a new way to be outside the room.
+ */
+function reachWithin(
+  world: { min: Vec3; max: Vec3 },
+  fromX: number,
+  fromZ: number,
+  dirX: number,
+  dirZ: number,
+  margin: number,
+): number {
+  const limit = (from: number, dir: number, lo: number, hi: number) => {
+    if (dir > 1e-6) return (hi - margin - from) / dir;
+    if (dir < -1e-6) return (lo + margin - from) / dir;
+    return Infinity;
+  };
+
+  return Math.max(
+    0,
+    Math.min(
+      limit(fromX, dirX, world.min[0], world.max[0]),
+      limit(fromZ, dirZ, world.min[2], world.max[2]),
+    ),
+  );
 }
