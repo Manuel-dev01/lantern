@@ -175,7 +175,16 @@ export function findPerch(
       // and open floor beats the dark underneath of a cupboard.
       let score = raised ? 100 : rest.surfaces === 1 ? 50 : 0;
       score += (rest.y - rest.floor) * 20;
-      score -= Math.abs(distance - target) * 10;
+
+      // On furniture, nearer is better; on the floor, mid-range is.
+      //
+      // Aiming for the middle of the search range drove everything to the far
+      // edge of the worktop, hard against the wall, where a reconstruction
+      // rounds the join upward and the object ends up a few centimetres proud
+      // of the surface you can see. It is also not where anyone sets a bowl
+      // down. The front of a counter is both the honest part of the mesh and
+      // the natural place for a thing to be.
+      score -= raised ? (distance - near) * 12 : Math.abs(distance - target) * 10;
       // All else equal, stay near the spot the server picked, so the objects
       // keep the spread they were given.
       score -= Math.abs(turn) * 6;
