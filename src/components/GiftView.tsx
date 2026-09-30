@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import Threshold from "@/components/Threshold";
 import { type Gift, stageLabel } from "@/lib/gifts";
 
 const WorldViewer = dynamic(() => import("@/components/WorldViewer"), { ssr: false });
@@ -34,6 +35,18 @@ export default function GiftView({ gift }: { gift: Gift }) {
   const [error, setError] = useState(gift.error);
   const [made, setMade] = useState(0);
   const [toMake, setToMake] = useState(gift.objects?.length ?? 0);
+
+  /**
+   * Whether the visitor has stepped through the door.
+   *
+   * `?enter=1` skips it, which the screenshot script and any debug link need -
+   * otherwise every capture is a photograph of the card.
+   */
+  const [entered, setEntered] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).get("enter") === "1",
+  );
 
   const done = stage === "ready" || stage === "failed";
 
@@ -77,7 +90,14 @@ export default function GiftView({ gift }: { gift: Gift }) {
   }, [gift.id, done, router]);
 
   if (stage === "ready" && gift.world) {
-    return <WorldViewer world={gift.world} />;
+    return (
+      <div className="relative h-full w-full">
+        {/* Mounted now, behind the card, so the world's several megabytes are
+            downloading while the visitor reads whose gift this is. */}
+        <WorldViewer world={gift.world} />
+        {entered ? null : <Threshold gift={gift} onEnter={() => setEntered(true)} />}
+      </div>
+    );
   }
 
   return (
