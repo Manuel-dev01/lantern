@@ -702,15 +702,35 @@ export default function WorldViewer({ world }: { world: World }) {
       {/* touch-action none: the browser must not claim the gesture for
           scrolling or pull-to-refresh while someone is walking. */}
       <div ref={mountRef} className="h-full w-full touch-none" />
-      {status !== "ready" && (
+      {status === "loading" && (
         <div className="pointer-events-none absolute inset-0 grid place-items-center">
           <p className="text-sm tracking-wide text-white/70">
-            {status === "loading"
-              ? progress === null
-                ? "opening the world…"
-                : `opening the world… ${progress}%`
-              : `could not open this world — ${message}`}
+            {progress === null ? "opening…" : `opening… ${progress}%`}
           </p>
+        </div>
+      )}
+
+      {/* A recipient was shown the raw exception - "could not open this world
+          - Failed to fetch". That is a sentence for me, not for someone who
+          was sent a gift, and it left them with nothing to do about it.
+          Reloading genuinely does fix this, so it is offered as a button
+          rather than assumed knowledge. */}
+      {status === "error" && (
+        <div className="absolute inset-0 grid place-items-center px-6">
+          <div className="max-w-sm text-center">
+            <p className="text-base text-white/80">This gift didn&rsquo;t open.</p>
+            <p className="mt-3 text-sm leading-relaxed text-white/45">
+              It is usually the connection, not the gift. Try again — nothing is lost.
+            </p>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="mt-8 rounded-full border border-white/20 px-6 py-2.5 text-xs tracking-[0.15em] text-white/80 uppercase transition hover:border-white/50 hover:text-white"
+            >
+              try again
+            </button>
+            <p className="mt-6 font-mono text-[10px] text-white/20">{message}</p>
+          </div>
         </div>
       )}
 

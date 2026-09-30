@@ -28,6 +28,20 @@ export default async function Home() {
       >
         make one
       </Link>
+
+      {/* One sentence, because standing in a world does not explain what the
+          world is for. Someone arriving cold - a judge, a stranger following a
+          link - could walk around this page indefinitely and never learn that
+          the thing is a gift made for one named person. That is the whole
+          idea, and it was nowhere on the page a stranger lands on. */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 px-6 pb-8 text-center">
+        <p className="text-sm leading-relaxed text-white/55">
+          Describe a place someone remembers. Lantern builds it.
+        </p>
+        <p className="mt-1.5 text-xs tracking-wide text-white/30">
+          Then send it to the person it was about, and let them walk in.
+        </p>
+      </div>
     </main>
   );
 }
