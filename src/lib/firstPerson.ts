@@ -284,8 +284,15 @@ export class FirstPersonController {
    * object onto the surface the player would actually stand on. Only
    * meaningful once the real collider has landed; the provisional box would
    * just hand back its own flat bottom.
+   *
+   * `from` must be a height *inside the room*, because the first surface a
+   * downward ray meets is the one it keeps. Starting somewhere safely high
+   * finds the ceiling and rests the object on the roof, out of sight - which
+   * is exactly what happened. The spawn is the right start: it is where
+   * Marble's camera stood, so it is indoors, below the ceiling and above the
+   * floor by definition.
    */
-  groundHeightAt(x: number, z: number, from = 1e4): number | null {
+  groundHeightAt(x: number, z: number, from: number): number | null {
     if (!this.bvh || this.provisional) return null;
 
     const ray = new THREE.Ray(

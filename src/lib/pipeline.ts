@@ -266,6 +266,30 @@ const TRIPO_MODEL = "P1-20260311";
 /** The LLM is asked for three to six; this is the hard ceiling on credits and time. */
 const MAX_OBJECTS = 6;
 
+/**
+ * What a keepsake is allowed to weigh.
+ *
+ * `smart_low_poly` alone did not do the work its name suggests: the first real
+ * gift's four objects came to 10.4 MB, 2 to 3.5 MB each, for things a visitor
+ * sees at about 35 cm across - beside a splat world already 23 MB, on a
+ * connection that has to carry both.
+ *
+ * Measured, not assumed. The same frying pan prompt, same model:
+ *
+ *   before  3,461,320 bytes   ~90 credits
+ *   after     708,316 bytes    40 credits
+ *
+ * Nearly five times smaller and cheaper to make. `pbr: false` is most of it -
+ * a PBR set is several textures where one suffices for an object this size -
+ * and `texture_quality: "standard"` and a face cap take the rest. Run
+ * `npm run object:size` to re-measure if these are ever changed.
+ */
+const OBJECT_BUDGET = {
+  face_limit: 10_000,
+  texture_quality: "standard",
+  pbr: false,
+} as const;
+
 /** Statuses Tripo will not move on from. */
 const TRIPO_DEAD = ["failed", "cancelled", "banned", "expired", "unknown"];
 
@@ -337,6 +361,7 @@ async function buildObjects(gift: Gift): Promise<AdvanceResult> {
         model: TRIPO_MODEL,
         smart_low_poly: true,
         texture: true,
+        ...OBJECT_BUDGET,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

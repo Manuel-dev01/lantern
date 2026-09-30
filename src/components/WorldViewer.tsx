@@ -297,7 +297,16 @@ export default function WorldViewer({ world }: { world: World }) {
      * Does nothing until the real collider is in, and is safe to run twice.
      */
     function restOnFloor(node: THREE.Object3D) {
-      const groundY = player?.groundHeightAt(node.position.x, node.position.z);
+      // Cast down from the spawn, not from above the building. A downward ray
+      // keeps the first surface it meets, so starting overhead finds the roof
+      // and rests the object on top of it - loaded, counted 4/4, and
+      // completely invisible. The spawn is where the capture camera stood:
+      // indoors, below the ceiling, above the floor.
+      const groundY = player?.groundHeightAt(
+        node.position.x,
+        node.position.z,
+        world.spawn?.[1] ?? 0,
+      );
       if (groundY == null) return;
 
       const box = new THREE.Box3().setFromObject(node);

@@ -14,7 +14,8 @@
     "object:probe": "node --env-file=.env scripts/probe-tripo.mts",
     "shot": "node scripts/shot.mjs",
     "world:push": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/push-assets.mts",
-    "gift:replace": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/replace-objects.mts"
+    "gift:replace": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/replace-objects.mts",
+    "object:size": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/probe-object-size.mts"
   },
   "dependencies": {
     "@sparkjsdev/spark": "^2.2.0",
