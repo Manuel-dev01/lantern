@@ -1,4 +1,4 @@
-import { head, list, put } from "@vercel/blob";
+import { del, head, list, put } from "@vercel/blob";
 
 import { fetchWithRetry } from "./net.ts";
 
@@ -104,4 +104,18 @@ export async function listBlobs(prefix: string): Promise<
   return blobs
     .map((b) => ({ pathname: b.pathname, url: b.url, uploadedAt: b.uploadedAt }))
     .sort((a, b) => b.uploadedAt.getTime() - a.uploadedAt.getTime());
+}
+
+/**
+ * Remove blobs by pathname.
+ *
+ * Regenerating a gift's objects leaves the previous ones stored but
+ * unreferenced: one rebuild of a four-object gift stranded 10.4 MB that
+ * nothing would ever serve again. Storage is cheap, but an asset nobody can
+ * reach is still an asset somebody pays for, and it makes the size numbers
+ * this project keeps measuring meaningless.
+ */
+export async function deleteBlobs(pathnames: string[]): Promise<void> {
+  if (!pathnames.length) return;
+  await del(pathnames, { token: token() });
 }
