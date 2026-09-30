@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import { MeshBVH } from "three-mesh-bvh";
 
+import type { FloorInfo } from "./seating.ts";
+
 /**
  * Walking inside a generated world.
  *
@@ -293,14 +295,32 @@ export class FirstPersonController {
    * floor by definition.
    */
   groundHeightAt(x: number, z: number, from: number): number | null {
+    return this.floorUnder(x, z, from)?.y ?? null;
+  }
+
+  /**
+   * Every surface below a point, reduced to what seating needs: the floor, and
+   * how many things are stacked above it.
+   *
+   * The count is the useful part. Exactly one surface means open ground; more
+   * means the point is under a counter or a table, which is how the viewer
+   * tells a spot worth resting an object on from one that would hide it.
+   */
+  floorUnder(x: number, z: number, from: number): FloorInfo | null {
     if (!this.bvh || this.provisional) return null;
 
     const ray = new THREE.Ray(
       new THREE.Vector3(x, from, z),
       new THREE.Vector3(0, -1, 0),
     );
-    const hit = this.bvh.raycastFirst(ray, THREE.DoubleSide);
-    return hit ? hit.point.y : null;
+
+    const hits = this.bvh.raycast(ray, THREE.DoubleSide);
+    if (!hits.length) return null;
+
+    let lowest = Infinity;
+    for (const hit of hits) lowest = Math.min(lowest, hit.point.y);
+
+    return { y: lowest, surfaces: hits.length };
   }
 
   /** False while there is nothing at all to stand on, so gravity is held off. */

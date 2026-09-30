@@ -16,7 +16,8 @@
     "world:push": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/push-assets.mts",
     "gift:replace": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/replace-objects.mts",
     "object:size": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/probe-object-size.mts",
-    "gift:rebuild": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/rebuild-objects.mts"
+    "gift:rebuild": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/rebuild-objects.mts",
+    "gift:probe": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/probe-placement.mts"
   },
   "dependencies": {
     "@sparkjsdev/spark": "^2.2.0",

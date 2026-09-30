@@ -12,6 +12,7 @@ import {
   isTouchDevice,
   mergeSceneGeometry,
 } from "@/lib/firstPerson";
+import { seatOnFloor } from "@/lib/seating";
 
 type Status = "loading" | "ready" | "error";
 
@@ -186,7 +187,41 @@ export default function WorldViewer({ world }: { world: World }) {
     // Draw order within the transparent queue. Everything that needs to
     // interleave with the splats is forced into that queue, because the opaque
     // queue always runs first and would write depth ahead of them.
-    const ORDER = { splat: 0, occluder: 1, gift: 2 };
+    const ORDER = { splat: 0, occluder: 1, shadow: 2, gift: 3 };
+
+    /**
+     * A soft dark disc, laid on the floor under each object.
+     *
+     * Without one an object that is genuinely touching the floor still reads
+     * as hovering: measured at -0.873 against a floor of -0.873, and it still
+     * looked like it was floating. Nothing in the scene casts shadows - the
+     * room is splats, which cannot receive one - so contact has to be drawn
+     * rather than lit. This is the oldest trick there is and the only one that
+     * works against a gaussian floor.
+     */
+    const shadowTexture = (() => {
+      const size = 128;
+      const canvas = document.createElement("canvas");
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return null;
+
+      const gradient = ctx.createRadialGradient(
+        size / 2, size / 2, 0,
+        size / 2, size / 2, size / 2,
+      );
+      gradient.addColorStop(0, "rgba(0,0,0,0.5)");
+      gradient.addColorStop(0.45, "rgba(0,0,0,0.22)");
+      gradient.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, size, size);
+
+      return new THREE.CanvasTexture(canvas);
+    })();
+
+    /** One shadow per object, reused when an object is re-seated. */
+    const shadows = new Map<THREE.Object3D, THREE.Mesh>();
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x05060a);
@@ -297,21 +332,69 @@ export default function WorldViewer({ world }: { world: World }) {
      * Does nothing until the real collider is in, and is safe to run twice.
      */
     function restOnFloor(node: THREE.Object3D) {
+      if (!player) return;
+
       // Cast down from the spawn, not from above the building. A downward ray
-      // keeps the first surface it meets, so starting overhead finds the roof
-      // and rests the object on top of it - loaded, counted 4/4, and
-      // completely invisible. The spawn is where the capture camera stood:
+      // keeps the surfaces it meets going down, so starting overhead finds the
+      // roof - which rested every object on top of it, loaded and counted 4/4
+      // and completely invisible. The spawn is where the capture camera stood:
       // indoors, below the ceiling, above the floor.
-      const groundY = player?.groundHeightAt(
-        node.position.x,
-        node.position.z,
-        world.spawn?.[1] ?? 0,
+      const from = world.spawn?.[1] ?? 0;
+      const seat = seatOnFloor(
+        (x, z) => player.floorUnder(x, z, from),
+        { x: node.position.x, z: node.position.z },
+        { x: world.spawn?.[0] ?? 0, z: world.spawn?.[2] ?? 0 },
       );
-      if (groundY == null) return;
+      if (!seat) return;
+
+      // Move first, measure second: the box is in world space, so it is only
+      // meaningful once the object is over the spot it will occupy.
+      node.position.x = seat.x;
+      node.position.z = seat.z;
 
       const box = new THREE.Box3().setFromObject(node);
       if (box.isEmpty()) return;
-      node.position.y += groundY - box.min.y;
+      node.position.y += seat.y - box.min.y;
+
+      castContactShadow(node, seat.y);
+    }
+
+    /** Lay (or move) the disc that makes an object look like it is touching. */
+    function castContactShadow(node: THREE.Object3D, floorY: number) {
+      if (!shadowTexture) return;
+
+      const box = new THREE.Box3().setFromObject(node);
+      if (box.isEmpty()) return;
+
+      const size = box.getSize(new THREE.Vector3());
+      const centre = box.getCenter(new THREE.Vector3());
+      // A little wider than the object's footprint, which is what a soft
+      // shadow does, and keeps a thin object like the spoon from getting a
+      // shadow too small to read.
+      const width = Math.max(size.x, size.z * 0.35) * 1.9;
+      const depth = Math.max(size.z, size.x * 0.35) * 1.9;
+
+      let shadow = shadows.get(node);
+      if (!shadow) {
+        shadow = new THREE.Mesh(
+          new THREE.PlaneGeometry(1, 1),
+          new THREE.MeshBasicMaterial({
+            map: shadowTexture,
+            transparent: true,
+            // Never occlude what it sits under, and never write depth - it is
+            // a mark on the floor, not a thing in the room.
+            depthWrite: false,
+          }),
+        );
+        shadow.rotation.x = -Math.PI / 2;
+        shadow.renderOrder = ORDER.shadow;
+        scene.add(shadow);
+        shadows.set(node, shadow);
+      }
+
+      shadow.scale.set(width, depth, 1);
+      // Just clear of the floor, or it fights the collider's depth and flickers.
+      shadow.position.set(centre.x, floorY + 0.005, centre.z);
     }
 
     /** Build a splat from bytes and put it in the scene, replacing any previous one. */
