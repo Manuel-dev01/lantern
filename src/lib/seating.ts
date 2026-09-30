@@ -86,3 +86,160 @@ export function seatOnFloor(
     clear: true,
   };
 }
+
+/** One surface a downward ray passed through. */
+export interface Surface {
+  y: number;
+  /** True when the face points upward - something can be set down on it. */
+  up: boolean;
+}
+
+export type SurfaceQuery = (x: number, z: number) => Surface[];
+
+export interface Perch {
+  x: number;
+  z: number;
+  /** The height the object's underside should sit at. */
+  y: number;
+  /** True when this is furniture rather than the floor. */
+  raised: boolean;
+}
+
+/**
+ * Somewhere to set a remembered thing down.
+ *
+ * Resting everything on the floor is correct and looks wrong: a frying pan and
+ * a bowl on the floor of a kitchen read as dropped, not kept. Things belong on
+ * the surfaces people put them on, and the collider knows where those are - a
+ * countertop is an upward-facing surface with clear air above it, and that is
+ * a definition this can actually test.
+ *
+ * Candidates are sampled along the direction the object was already given, so
+ * the arrangement the server chose is preserved; only the height and the exact
+ * spot change. Each candidate is checked at its corners too, so an object is
+ * not perched half off the edge of a counter.
+ *
+ * Falls back to the floor, which is always a surface, so a world with no
+ * furniture still works.
+ */
+export function findPerch(
+  query: SurfaceQuery,
+  spawn: { x: number; z: number; y: number },
+  direction: { x: number; z: number },
+  object: { height: number; radius: number },
+  taken: Array<{ x: number; z: number }>,
+  {
+    near = 0.45,
+    far = 2.4,
+    steps = 14,
+    sweep = Math.PI / 3,
+    arcSteps = 11,
+    spacing = 0.25,
+    raisedBy = 0.15,
+  }: {
+    near?: number;
+    far?: number;
+    steps?: number;
+    sweep?: number;
+    arcSteps?: number;
+    spacing?: number;
+    raisedBy?: number;
+  } = {},
+): Perch | null {
+  const target = (near + far) / 2;
+  const facing = Math.atan2(direction.z, direction.x);
+
+  let best: (Perch & { score: number }) | null = null;
+
+  // Sweep either side of the direction the server chose rather than along it.
+  // A counter runs across the view, not away from it, so searching one line
+  // out from the spawn found the worktop for exactly one object in four.
+  for (let a = 0; a < arcSteps; a++) {
+    const turn = arcSteps === 1 ? 0 : (a / (arcSteps - 1) - 0.5) * 2 * sweep;
+    const angle = facing + turn;
+    const dx = Math.cos(angle);
+    const dz = Math.sin(angle);
+
+    for (let i = 0; i < steps; i++) {
+      const distance = near + ((far - near) * i) / (steps - 1);
+      const x = spawn.x + dx * distance;
+      const z = spawn.z + dz * distance;
+
+      const rest = restingHeight(query, x, z, spawn.y, object);
+      if (!rest) continue;
+      if (taken.some((t) => Math.hypot(t.x - x, t.z - z) < spacing)) continue;
+
+      const raised = rest.y - rest.floor > raisedBy;
+
+      // A surface someone would actually put something on beats the floor,
+      // and open floor beats the dark underneath of a cupboard.
+      let score = raised ? 100 : rest.surfaces === 1 ? 50 : 0;
+      score += (rest.y - rest.floor) * 20;
+      score -= Math.abs(distance - target) * 10;
+      // All else equal, stay near the spot the server picked, so the objects
+      // keep the spread they were given.
+      score -= Math.abs(turn) * 6;
+
+      if (!best || score > best.score) best = { x, z, y: rest.y, raised, score };
+    }
+  }
+
+  return best ? { x: best.x, z: best.z, y: best.y, raised: best.raised } : null;
+}
+
+/**
+ * The height an object would come to rest at over one spot, or null if it
+ * cannot sit there.
+ *
+ * Takes the highest upward-facing surface below `reach` with room above it
+ * for the object, and only accepts it if the object's whole footprint is
+ * supported at roughly the same height - otherwise a bowl ends up hanging over
+ * the edge of a counter with nothing under half of it.
+ */
+function restingHeight(
+  query: SurfaceQuery,
+  x: number,
+  z: number,
+  reach: number,
+  object: { height: number; radius: number },
+): { y: number; floor: number; surfaces: number } | null {
+  const surfaces = query(x, z);
+  if (!surfaces.length) return null;
+
+  const sorted = [...surfaces].sort((a, b) => b.y - a.y);
+  const floor = sorted[sorted.length - 1].y;
+
+  for (const surface of sorted) {
+    if (!surface.up) continue;
+
+    // Must be something you could reach and see over, not the roof. The ray
+    // starts above the building so that the real ceiling is known, which
+    // means the roof itself is in this list and has to be excluded here.
+    if (surface.y > reach - 0.05) continue;
+
+    // What is directly above it, and so how much room the object has. Open
+    // air if nothing is: measuring this against eye height instead was what
+    // kept a 35 cm stove off a counter with a metre of space above it.
+    const above = sorted.find((s) => s.y > surface.y + 1e-4)?.y ?? Infinity;
+    if (above - surface.y < object.height * 1.15) continue;
+
+    // Mostly supported, not perfectly.
+    //
+    // A reconstructed worktop is a thin band - this kitchen's is about 0.2
+    // deep with nothing behind its back edge - so insisting all four corners
+    // be on it rejected every spot on the counter, and everything fell to the
+    // floor. Three of four at a little over half the radius is the difference
+    // between a bowl sitting near the edge, which is where bowls sit, and a
+    // bowl balanced on air.
+    const corners = [0, Math.PI / 2, Math.PI, (3 * Math.PI) / 2].filter((angle) => {
+      const px = x + Math.cos(angle) * object.radius * 0.6;
+      const pz = z + Math.sin(angle) * object.radius * 0.6;
+      return query(px, pz).some((s) => s.up && Math.abs(s.y - surface.y) < 0.05);
+    });
+    if (corners.length < 3) continue;
+
+    return { y: surface.y, floor, surfaces: sorted.length };
+  }
+
+  return null;
+}

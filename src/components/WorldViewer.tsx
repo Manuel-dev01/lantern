@@ -12,7 +12,7 @@ import {
   isTouchDevice,
   mergeSceneGeometry,
 } from "@/lib/firstPerson";
-import { seatOnFloor } from "@/lib/seating";
+import { findPerch, seatOnFloor } from "@/lib/seating";
 
 type Status = "loading" | "ready" | "error";
 
@@ -331,32 +331,84 @@ export default function WorldViewer({ world }: { world: World }) {
      *
      * Does nothing until the real collider is in, and is safe to run twice.
      */
-    function restOnFloor(node: THREE.Object3D) {
+    /** Where each object was put, so re-seating does not fight itself. */
+    const perches = new Map<THREE.Object3D, { x: number; z: number }>();
+
+    /**
+     * Set an object down somewhere a person would have set it down.
+     *
+     * Everything on the floor was geometrically right and read as dropped
+     * rather than kept - a frying pan and a bowl do not live on a kitchen
+     * floor. The collider knows where the surfaces are, so the object looks
+     * for one: an upward-facing face with room above it and support under its
+     * whole footprint. The floor is the fallback, and a world with no
+     * furniture still works.
+     *
+     * The direction comes from the position the server chose, not from where
+     * the object currently is, so running this twice cannot walk it across
+     * the room.
+     */
+    function seatObject(node: THREE.Object3D) {
       if (!player) return;
 
-      // Cast down from the spawn, not from above the building. A downward ray
-      // keeps the surfaces it meets going down, so starting overhead finds the
-      // roof - which rested every object on top of it, loaded and counted 4/4
-      // and completely invisible. The spawn is where the capture camera stood:
-      // indoors, below the ceiling, above the floor.
       const from = world.spawn?.[1] ?? 0;
-      const seat = seatOnFloor(
-        (x, z) => player.floorUnder(x, z, from),
-        { x: node.position.x, z: node.position.z },
-        { x: world.spawn?.[0] ?? 0, z: world.spawn?.[2] ?? 0 },
-      );
-      if (!seat) return;
+      const spawn = { x: world.spawn?.[0] ?? 0, z: world.spawn?.[2] ?? 0, y: from };
 
-      // Move first, measure second: the box is in world space, so it is only
-      // meaningful once the object is over the spot it will occupy.
-      node.position.x = seat.x;
-      node.position.z = seat.z;
+      const measured = new THREE.Box3().setFromObject(node);
+      if (measured.isEmpty()) return;
+      const size = measured.getSize(new THREE.Vector3());
+
+      const original = (node.userData.giftObject as { position?: number[] } | undefined)?.position;
+      let dx = (original?.[0] ?? node.position.x) - spawn.x;
+      let dz = (original?.[2] ?? node.position.z) - spawn.z;
+      const length = Math.hypot(dx, dz) || 1;
+      dx /= length;
+      dz /= length;
+
+      // Everything already placed except this object, so re-seating it does
+      // not treat its own old spot as occupied.
+      const taken = [...perches.entries()]
+        .filter(([other]) => other !== node)
+        .map(([, spot]) => spot);
+
+      // Cast from above the building so the real ceiling is in the list. The
+      // roof is then excluded by height rather than by cutting the ray short,
+      // which is what made every surface look like it had no room above it.
+      const overhead = (world.bounds?.max[1] ?? from) + 1;
+
+      const perch = findPerch(
+        (x, z) => player.surfacesUnder(x, z, overhead),
+        spawn,
+        { x: dx, z: dz },
+        { height: size.y, radius: Math.max(size.x, size.z) * 0.5 },
+        taken,
+      );
+
+      let restY: number;
+      if (perch) {
+        node.position.x = perch.x;
+        node.position.z = perch.z;
+        restY = perch.y;
+        perches.set(node, { x: perch.x, z: perch.z });
+      } else {
+        // No surface would take it - rest it on the floor where it stands.
+        const seat = seatOnFloor(
+          (x, z) => player.floorUnder(x, z, from),
+          { x: original?.[0] ?? node.position.x, z: original?.[2] ?? node.position.z },
+          spawn,
+        );
+        if (!seat) return;
+        node.position.x = seat.x;
+        node.position.z = seat.z;
+        restY = seat.y;
+        perches.set(node, { x: seat.x, z: seat.z });
+      }
 
       const box = new THREE.Box3().setFromObject(node);
       if (box.isEmpty()) return;
-      node.position.y += seat.y - box.min.y;
+      node.position.y += restY - box.min.y;
 
-      castContactShadow(node, seat.y);
+      castContactShadow(node, restY);
     }
 
     /** Lay (or move) the disc that makes an object look like it is touching. */
@@ -533,7 +585,7 @@ export default function WorldViewer({ world }: { world: World }) {
         // Objects that arrived before the collider were placed on the
         // bounding box's floor, which is not the floor. Now there is a real
         // surface to sit on, they are re-seated on it.
-        for (const node of placed) restOnFloor(node);
+        for (const node of placed) seatObject(node);
         },
         (event: ProgressEvent) => {
           if (disposed || !event.lengthComputable || !event.total) return;
@@ -593,7 +645,7 @@ export default function WorldViewer({ world }: { world: World }) {
         gltf.scene.userData.giftObject = obj;
         scene.add(gltf.scene);
         placed.push(gltf.scene);
-        restOnFloor(gltf.scene);
+        seatObject(gltf.scene);
         objectsIn++;
       }
     }

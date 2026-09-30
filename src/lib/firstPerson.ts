@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { MeshBVH } from "three-mesh-bvh";
 
-import type { FloorInfo } from "./seating.ts";
+import type { FloorInfo, Surface } from "./seating.ts";
 
 /**
  * Walking inside a generated world.
@@ -321,6 +321,30 @@ export class FirstPersonController {
     for (const hit of hits) lowest = Math.min(lowest, hit.point.y);
 
     return { y: lowest, surfaces: hits.length };
+  }
+
+  /**
+   * Every surface a downward ray passes through, with which way each faces.
+   *
+   * The normal is what separates a countertop from the underside of the
+   * cupboard above it, and from the wall behind both. Only upward-facing
+   * surfaces can hold anything, so placement needs the direction, not just
+   * the height.
+   */
+  surfacesUnder(x: number, z: number, from: number): Surface[] {
+    if (!this.bvh || this.provisional) return [];
+
+    const ray = new THREE.Ray(
+      new THREE.Vector3(x, from, z),
+      new THREE.Vector3(0, -1, 0),
+    );
+
+    return this.bvh.raycast(ray, THREE.DoubleSide).map((hit) => ({
+      y: hit.point.y,
+      // The collider's transforms are baked in by mergeSceneGeometry, so a
+      // face normal here is already in world space.
+      up: (hit.face?.normal.y ?? 0) > 0.6,
+    }));
   }
 
   /** False while there is nothing at all to stand on, so gravity is held off. */
