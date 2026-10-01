@@ -1,4 +1,4 @@
-import { readGift, writeGift } from "@/lib/gifts";
+import { readGift, setShared, writeGift } from "@/lib/gifts";
 
 /**
  * Whether a gift may appear in the constellation.
@@ -27,6 +27,11 @@ export async function POST(request: Request, ctx: RouteContext<"/api/gifts/[id]/
   // accident from a stray string.
   gift.shared = body.shared === true;
   await writeGift(gift);
+
+  // The flag on the document is the record; the index is what the gallery
+  // actually reads, because a document fetched from a public URL can be a
+  // cached older version for minutes at a time.
+  await setShared(gift, gift.shared);
 
   return Response.json({ id: gift.id, shared: gift.shared });
 }

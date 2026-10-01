@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { listSharedGifts } from "@/lib/gifts";
+import { readSharedIndex } from "@/lib/gifts";
 
 /**
  * Every gift whose sender chose to show it.
@@ -24,7 +24,7 @@ export const metadata = {
 };
 
 export default async function ConstellationPage() {
-  const gifts = await listSharedGifts();
+  const gifts = await readSharedIndex();
 
   return (
     <main className="min-h-dvh w-full bg-[#05060a] px-6 py-16">
@@ -57,15 +57,15 @@ export default async function ConstellationPage() {
                   className="group block overflow-hidden rounded-xl border border-white/10 transition hover:border-white/30"
                 >
                   <div className="aspect-[4/3] w-full bg-white/[0.03]">
-                    {gift.world?.thumbnailUrl ? (
+                    {gift.thumbnailUrl ? (
                       // Marble's own preview of the world, mirrored like
                       // everything else. Plain img: these are arbitrary
                       // remote-shaped paths behind a rewrite, not build-time
                       // assets, and they are already sized for this.
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
-                        src={gift.world.thumbnailUrl}
-                        alt={gift.world.caption ?? "A place someone built"}
+                        src={gift.thumbnailUrl}
+                        alt="A place someone built"
                         loading="lazy"
                         className="h-full w-full object-cover opacity-80 transition group-hover:opacity-100"
                       />

@@ -20,7 +20,8 @@
     "gift:probe": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/probe-placement.mts",
     "gift:seating": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/probe-seating.mts",
     "gift:seed": "node scripts/seed-gift.mts",
-    "gift:drive": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/drive-gifts.mts"
+    "gift:drive": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/drive-gifts.mts",
+    "gift:reindex": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/reindex-shared.mts"
   },
   "dependencies": {
     "@sparkjsdev/spark": "^2.2.0",

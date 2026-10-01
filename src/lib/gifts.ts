@@ -1,5 +1,5 @@
 import type { World } from "./types";
-import { listBlobs, readBlobJson, writeBlobJson } from "./providers/blob.ts";
+import { deleteBlobs, listBlobs, readBlobJson, writeBlobJson } from "./providers/blob.ts";
 
 /**
  * A gift: the thing a visitor makes and sends.
@@ -155,6 +155,77 @@ export function stageLabel(stage: GiftStage): string {
     case "failed":
       return "something went wrong";
   }
+}
+
+/** One card in the constellation. Everything it needs, and nothing private. */
+export interface SharedCard {
+  id: string;
+  toName?: string;
+  fromName?: string;
+  thumbnailUrl?: string;
+  createdAt: string;
+}
+
+/** Where a versioned index lives. Each write makes a new, never-cached name. */
+const SHARED_PREFIX = "shared/";
+
+/**
+ * Read the newest shared index.
+ *
+ * Deliberately not "read N gift documents and filter". Those are fetched over
+ * public URLs that an edge cache holds for a while, and two readers in
+ * different places genuinely see different versions - which showed as a
+ * gallery stuck at three cards while five gifts were shared.
+ *
+ * `list` is the store's own API and is strongly consistent, so the newest
+ * index is found reliably. Its contents are then fetched from a URL that has
+ * never existed before and so cannot be stale.
+ */
+export async function readSharedIndex(): Promise<SharedCard[]> {
+  const files = await listBlobs(SHARED_PREFIX);
+  const newest = files[0];
+  if (!newest) return [];
+
+  try {
+    const res = await fetch(newest.url, { cache: "no-store" });
+    if (!res.ok) return [];
+    return (await res.json()) as SharedCard[];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Replace the index, then remove the ones it supersedes.
+ *
+ * New name first, old names after: a reader between the two steps finds either
+ * the new index or the old one, never nothing.
+ */
+export async function writeSharedIndex(cards: SharedCard[]): Promise<void> {
+  const existing = await listBlobs(SHARED_PREFIX);
+
+  await writeBlobJson(`${SHARED_PREFIX}index-${Date.now()}.json`, cards);
+
+  const stale = existing.map((f) => f.pathname);
+  if (stale.length) await deleteBlobs(stale);
+}
+
+/** Add or remove one gift from the index, keeping it newest-first. */
+export async function setShared(gift: Gift, shared: boolean): Promise<void> {
+  const cards = (await readSharedIndex()).filter((c) => c.id !== gift.id);
+
+  if (shared) {
+    cards.push({
+      id: gift.id,
+      toName: gift.toName,
+      fromName: gift.fromName,
+      thumbnailUrl: gift.world?.thumbnailUrl,
+      createdAt: gift.createdAt,
+    });
+  }
+
+  cards.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  await writeSharedIndex(cards);
 }
 
 /**
