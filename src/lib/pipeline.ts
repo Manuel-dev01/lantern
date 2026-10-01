@@ -3,6 +3,7 @@ import {
   type Gift,
   type GiftStage,
   giftAssetPath,
+  readGift,
   writeGift,
 } from "./gifts.ts";
 import { listBlobs, mirrorToBlob } from "./providers/blob.ts";
@@ -80,8 +81,42 @@ export async function advance(gift: Gift): Promise<AdvanceResult> {
   }
 }
 
+/**
+ * The order a gift moves through, so it can never be walked backwards.
+ *
+ * There is no worker and no lock: a tick reads the whole document, works, and
+ * writes the whole document back. Two ticks that overlap therefore race, and
+ * the slower one wins by writing last - which took two finished gifts and put
+ * them back into `rigging`, where they stayed, because the stage they had
+ * already reached was overwritten with the one their tick had started from.
+ *
+ * Mostly this was invisible: ticks were short and the window was milliseconds.
+ * The rigging stage blocks for up to a minute waiting on a rig check, and the
+ * race became the normal case.
+ */
+const ORDER: GiftStage[] = [
+  "world_generating",
+  "world_mirroring",
+  "objects_generating",
+  "rigging",
+  "ready",
+];
+
 async function settle(gift: Gift, stage: GiftStage): Promise<AdvanceResult> {
   if (gift.stage === stage) return { gift, changed: false };
+
+  // "failed" is not on the path and may be reached from anywhere.
+  if (stage !== "failed" && gift.stage !== "failed") {
+    // What the store says now, not what this tick read when it began.
+    const current = (await readGift(gift.id))?.stage;
+    if (current && ORDER.indexOf(current) > ORDER.indexOf(stage)) {
+      // Another tick has already taken it further. This one is stale and has
+      // nothing to add; writing would undo real work.
+      gift.stage = current;
+      return { gift, changed: false };
+    }
+  }
+
   gift.stage = stage;
   await writeGift(gift);
   return { gift, changed: true };
@@ -498,9 +533,10 @@ async function rigHeroes(gift: Gift): Promise<AdvanceResult> {
   if (unasked) {
     try {
       const checkId = await client.rigCheck({ input: unasked.taskId! });
-      // Short next to the 300s tick budget. A rig check answers in seconds;
-      // anything slower than this is not worth holding a gift open for.
-      const task = await client.waitForTask(checkId, { timeoutMs: 60_000 });
+      // Short on purpose. A rig check answers in seconds, and every second
+      // this blocks is a second two ticks can overlap and race each other -
+      // which is how a minute-long wait here walked finished gifts backwards.
+      const task = await client.waitForTask(checkId, { timeoutMs: 20_000 });
       unasked.riggable = Boolean(task.output?.riggable);
     } catch (err) {
       // Could not tell, so treat it as still. Better a quiet room than a

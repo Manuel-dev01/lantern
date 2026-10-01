@@ -93,11 +93,22 @@ export default function GiftView({ gift }: { gift: Gift }) {
       }
     }
 
-    void tick();
-    const handle = setInterval(tick, POLL_MS);
+    // Sequential, not on an interval.
+    //
+    // setInterval fires whether or not the last tick has returned, and a tick
+    // can take a minute. Overlapping ticks each read the whole gift, work, and
+    // write the whole gift back, so the slower one wins by writing last - which
+    // walked two finished gifts backwards into an earlier stage.
+    let handle: ReturnType<typeof setTimeout>;
+    const loop = async () => {
+      await tick();
+      if (!cancelled) handle = setTimeout(loop, POLL_MS);
+    };
+    void loop();
+
     return () => {
       cancelled = true;
-      clearInterval(handle);
+      clearTimeout(handle);
     };
   }, [gift.id, done, router]);
 
