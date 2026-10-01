@@ -19,7 +19,8 @@
     "gift:rebuild": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/rebuild-objects.mts",
     "gift:probe": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/probe-placement.mts",
     "gift:seating": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/probe-seating.mts",
-    "gift:seed": "node scripts/seed-gift.mts"
+    "gift:seed": "node scripts/seed-gift.mts",
+    "gift:drive": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/drive-gifts.mts"
   },
   "dependencies": {
     "@sparkjsdev/spark": "^2.2.0",
