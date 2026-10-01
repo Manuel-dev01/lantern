@@ -59,6 +59,56 @@ export interface AdvanceResult {
   changed: boolean;
 }
 
+/**
+ * How long one driver may claim a gift before another may take over.
+ *
+ * Longer than the slowest single unit of work - mirroring a full_res splat -
+ * so a lease does not expire under a driver that is still going. Short enough
+ * that a crashed driver does not strand a gift for long.
+ */
+const LEASE_MS = 120_000;
+
+export interface LeasedResult extends AdvanceResult {
+  /** True when another driver holds the lease and this call did nothing. */
+  busy?: boolean;
+}
+
+/**
+ * Advance a gift, but only if nobody else is currently advancing it.
+ *
+ * The pipeline has no worker: whoever calls this drives it. That was fine
+ * while only the sender's browser called it, and stops being fine the moment
+ * the server drives it too - a browser polling the same gift becomes a second
+ * driver, and two drivers looking at the same unstarted object will each
+ * create a Tripo task for it.
+ */
+export async function advanceWithLease(gift: Gift): Promise<LeasedResult> {
+  const holder = crypto.randomUUID();
+  const now = Date.now();
+
+  const current = (await readGift(gift.id)) ?? gift;
+  if (current.leaseUntil && Date.parse(current.leaseUntil) > now) {
+    return { gift: current, changed: false, busy: true };
+  }
+
+  current.leaseUntil = new Date(now + LEASE_MS).toISOString();
+  current.leaseHolder = holder;
+  await writeGift(current);
+
+  try {
+    return await advance(current);
+  } finally {
+    // Release from the newest copy, so clearing the lease cannot undo whatever
+    // the stage just wrote.
+    const latest = await readGift(gift.id);
+    if (latest?.leaseHolder === holder) {
+      delete latest.leaseUntil;
+      delete latest.leaseHolder;
+      await writeGift(latest);
+    }
+  }
+}
+
 export async function advance(gift: Gift): Promise<AdvanceResult> {
   try {
     switch (gift.stage) {

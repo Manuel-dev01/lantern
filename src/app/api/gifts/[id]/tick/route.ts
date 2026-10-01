@@ -1,5 +1,7 @@
+import { after } from "next/server";
+
 import { readGift, stageLabel } from "@/lib/gifts";
-import { advance } from "@/lib/pipeline";
+import { advanceWithLease } from "@/lib/pipeline";
 
 /**
  * Advance a gift by one stage.
@@ -63,7 +65,22 @@ export async function POST(request: Request, ctx: RouteContext<"/api/gifts/[id]/
     gift.error = undefined;
   }
 
-  const { gift: updated, changed } = await advance(gift);
+  const { gift: updated, changed, busy } = await advanceWithLease(gift);
+
+  // Keep going after the answer is sent.
+  //
+  // Nothing here is a worker: whoever polls this is what moves a gift
+  // forward. So a sender who closes the tab halfway through leaves their gift
+  // stopped, half built, with the credits already spent on it. `after` lets
+  // one request carry it for the rest of the invocation, and hand on to a
+  // fresh one if it still is not finished - so the build survives the browser
+  // that started it.
+  //
+  // The lease is what makes this safe to run alongside a browser that is
+  // still polling: only one of them does work at a time.
+  if (!busy && updated.stage !== "ready" && updated.stage !== "failed") {
+    after(() => carryOn(id, request.url, chainDepth(request.url)));
+  }
 
   // Counted rather than guessed: a stage name alone cannot tell a visitor
   // whether anything is happening over four minutes of object generation.
@@ -76,9 +93,52 @@ export async function POST(request: Request, ctx: RouteContext<"/api/gifts/[id]/
     stage: updated.stage,
     label: stageLabel(updated.stage),
     changed,
+    busy,
     objectsDone,
     objectsTotal,
     error: updated.error,
     ready: updated.stage === "ready",
   });
+}
+
+/**
+ * How many times this chain has handed on, so it cannot run forever.
+ *
+ * Twelve links of four minutes covers about fifty minutes, comfortably past
+ * the longest gift observed (about twenty), and bounds the damage if a stage
+ * ever fails in a way that looks like progress.
+ */
+const CHAIN_MAX = 12;
+
+/** Leave room inside the 300s budget to hand on cleanly. */
+const WORK_MS = 230_000;
+
+function chainDepth(url: string): number {
+  return Number(new URL(url).searchParams.get("chain") ?? 0);
+}
+
+async function carryOn(id: string, url: string, depth: number): Promise<void> {
+  const deadline = Date.now() + WORK_MS;
+
+  while (Date.now() < deadline) {
+    const gift = await readGift(id);
+    if (!gift || gift.stage === "ready" || gift.stage === "failed") return;
+
+    const { busy } = await advanceWithLease(gift);
+    // Someone else is driving it. Nothing to add, and no reason to hand on.
+    if (busy) return;
+
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+  }
+
+  if (depth >= CHAIN_MAX) return;
+
+  const next = new URL(url);
+  next.searchParams.set("chain", String(depth + 1));
+  try {
+    await fetch(next.toString(), { method: "POST" });
+  } catch {
+    // The chain is a convenience, not the guarantee. If handing on fails the
+    // cron picks the gift up later.
+  }
 }

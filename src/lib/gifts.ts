@@ -100,6 +100,21 @@ export interface Gift {
    */
   shared?: boolean;
 
+  /**
+   * A soft claim on the right to do work, so two drivers do not do it twice.
+   *
+   * There is no worker and no lock. Once the server keeps advancing a gift on
+   * its own, a browser polling the same gift is a second driver - and two
+   * drivers both looking at the same unstarted object will each create a Tripo
+   * task for it, spending twice and keeping one of them.
+   *
+   * Best effort, not a guarantee: this is a field in a document on a store
+   * that can serve a stale read, so two holders remain possible for a short
+   * window. It narrows the race by a lot and costs one read.
+   */
+  leaseUntil?: string;
+  leaseHolder?: string;
+
   /** Set when stage is "failed". Shown to the visitor rather than a blank screen. */
   error?: string;
 }
