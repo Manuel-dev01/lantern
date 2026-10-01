@@ -36,8 +36,32 @@ railway variables --set "LANTERN_BASE_URL=https://lantern-manuel-dev01s-projects
 railway up
 ```
 
-`railway.json` already sets the start command and asks for a restart on failure, and the service
-needs no public domain - it makes requests and serves none.
+The service needs no public domain - it makes requests and serves none.
+
+### Two things that will waste an hour if you do not know them
+
+**The start command comes from the `Procfile`, not from `railway.json`.** Nixpacks detects a
+Next.js app in this repo and starts `next start`, and the `startCommand` in `railway.json` did not
+displace it - the service came up three times serving a web app nobody asked for. `Procfile` does
+displace it. Both files are kept: the Procfile is what actually works, and `railway.json` carries
+the restart policy.
+
+**Strip the newline off the token.** `.env.local` is written with Windows line endings, so reading
+the value straight out of it carries a trailing carriage return into Railway, and every call comes
+back `Vercel Blob: Access denied, please provide a valid token for this resource` - which reads
+exactly like a wrong token rather than a well-formed one with two extra characters on the end:
+
+```bash
+TOKEN=$(grep -m1 '^BLOB_READ_WRITE_TOKEN=' .env.local | cut -d= -f2- | tr -d '
+')
+```
+
+### On the deprecation warning
+
+The CLI will say `railway.json` is deprecated in favour of `.railway/railway.ts`. That migration was
+attempted and abandoned: the generated file needs the `railway` npm package, which then refuses to
+run because it believes the CLI is too old - against a CLI three releases newer than its own
+minimum. The old format works until 2026-12-01, which is long after this matters.
 
 **The only secret it needs is `BLOB_READ_WRITE_TOKEN`**, which must be the same store Vercel uses,
 or the worker will cheerfully drive an empty list for ever. Everything else - the Marble, Tripo and
@@ -48,3 +72,16 @@ the app to take one more step.
 
 `railway logs` should show `worker up, driving <url>`, then a line per gift it picks up and a line
 when each finishes. On an idle system it says nothing at all, which is correct.
+
+## Proving it works
+
+The point of the worker is a gift that finishes with nobody watching, so that is what to test:
+create one and deliberately never open it.
+
+```bash
+curl -s -X POST -H "Content-Type: application/json"   -d '{"toName":"worker test","memory":"...","model":"marble-1.0-draft"}'   https://lantern-manuel-dev01s-projects.vercel.app/api/gifts
+```
+
+Then watch `railway logs`. It should report `driving 1: <id>` within half a minute and carry the
+gift through every stage on its own. Confirmed on 1 Oct 2026: a gift created and never polled by
+any browser went from `world_generating` to `objects_generating` under the worker alone.
