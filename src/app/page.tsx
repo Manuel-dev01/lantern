@@ -22,12 +22,23 @@ export default async function Home() {
       {/* Deliberately quiet. Someone arriving should meet the place first and
           understand what this is by standing in it; the invitation to make one
           is for after that, not instead of it. */}
-      <Link
-        href="/make"
-        className="absolute right-5 top-5 z-10 rounded-full bg-black/40 px-4 py-2 text-xs tracking-wide text-white/50 backdrop-blur-sm transition hover:text-white/90"
-      >
-        make one
-      </Link>
+      <nav className="absolute right-5 top-5 z-10 flex items-center gap-2">
+        {/* A judge arriving cold will not wait five minutes for the create
+            flow before seeing a second world. This is the way in that costs
+            them nothing. */}
+        <Link
+          href="/constellation"
+          className="rounded-full bg-black/40 px-4 py-2 text-xs tracking-wide text-white/50 backdrop-blur-sm transition hover:text-white/90"
+        >
+          constellation
+        </Link>
+        <Link
+          href="/make"
+          className="rounded-full bg-black/40 px-4 py-2 text-xs tracking-wide text-white/50 backdrop-blur-sm transition hover:text-white/90"
+        >
+          make one
+        </Link>
+      </nav>
 
       {/* One sentence, because standing in a world does not explain what the
           world is for. Someone arriving cold - a judge, a stranger following a

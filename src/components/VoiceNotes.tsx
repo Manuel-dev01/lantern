@@ -34,6 +34,7 @@ export default function VoiceNotes({
     ),
   );
   const [error, setError] = useState<string | null>(null);
+  const [shared, setShared] = useState(false);
 
   const recorder = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
@@ -95,6 +96,23 @@ export default function VoiceNotes({
     }
   }
 
+  async function share(next: boolean) {
+    setShared(next);
+    try {
+      await fetch(`/api/gifts/${giftId}/share`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ shared: next }),
+      });
+    } catch {
+      // Put the box back rather than claiming something was shared when it
+      // was not - this is a consent control, so a silent failure is the one
+      // outcome it must not have.
+      setShared(!next);
+      setError("That did not save. The place has not been shared.");
+    }
+  }
+
   return (
     <div className="absolute inset-0 z-20 grid place-items-center overflow-y-auto bg-[#05060a] px-6 py-10">
       <div className="w-full max-w-md">
@@ -139,6 +157,24 @@ export default function VoiceNotes({
         {error ? (
           <p className="mt-6 text-xs leading-relaxed text-red-300/70">{error}</p>
         ) : null}
+
+        {/* Asked here because this is the first moment the sender knows what
+            they would be sharing. Off unless they say otherwise: the memory
+            box invites people to write something true about one other person,
+            and a full gallery is not worth publishing that by default. The
+            memory itself is never shown in the constellation either way. */}
+        <label className="mt-8 flex cursor-pointer items-start gap-3 text-left">
+          <input
+            type="checkbox"
+            checked={shared}
+            onChange={(event) => void share(event.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-white/80"
+          />
+          <span className="text-xs leading-relaxed text-white/45">
+            Show this place in the constellation. Only the room and their name — never what
+            you wrote.
+          </span>
+        </label>
 
         <button
           type="button"

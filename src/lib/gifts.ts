@@ -1,5 +1,5 @@
 import type { World } from "./types";
-import { readBlobJson, writeBlobJson } from "./providers/blob.ts";
+import { listBlobs, readBlobJson, writeBlobJson } from "./providers/blob.ts";
 
 /**
  * A gift: the thing a visitor makes and sends.
@@ -87,6 +87,19 @@ export interface Gift {
   /** The finished manifest, in the same shape the viewer already renders. */
   world?: World;
 
+  /**
+   * Whether this gift may appear in the constellation.
+   *
+   * Off unless the sender says otherwise. The memory box invites people to
+   * write something true about one other person, and a good number of them
+   * will - publishing that by default because a gallery looks better full is
+   * not a trade this project gets to make on their behalf.
+   *
+   * The sender is asked once, after they have seen what was built, which is
+   * the only moment they know what they would be sharing.
+   */
+  shared?: boolean;
+
   /** Set when stage is "failed". Shown to the visitor rather than a blank screen. */
   error?: string;
 }
@@ -142,4 +155,25 @@ export function stageLabel(stage: GiftStage): string {
     case "failed":
       return "something went wrong";
   }
+}
+
+/**
+ * The gifts that may be shown publicly, newest first.
+ *
+ * Listing asks the store rather than keeping an index, for the same reason
+ * mirroring does: an index is a second source of truth that can drift, and
+ * `list` is strongly consistent. Only the documents are read - a gift's assets
+ * live under the same prefix and are skipped by the `.json` suffix.
+ */
+export async function listSharedGifts(limit = 60): Promise<Gift[]> {
+  const blobs = await listBlobs(PREFIX);
+  const docs = blobs.filter((b) => b.pathname.endsWith(".json"));
+
+  const gifts = await Promise.all(
+    docs.slice(0, limit).map((b) => readBlobJson<Gift>(b.pathname).catch(() => null)),
+  );
+
+  return gifts
+    .filter((gift): gift is Gift => Boolean(gift?.shared && gift.stage === "ready" && gift.world))
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 }
