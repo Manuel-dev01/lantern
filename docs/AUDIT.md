@@ -13,12 +13,8 @@ Bugs seen in some of the seeded worlds. **No detail captured yet**; this is a pl
 is not lost. Needs: which gift id, what was wrong, and a screenshot if it is visual.
 
 ### Object placement
-- A kerosene stove now seats on the worktop with everything else. On the floor looked better for
-  that object specifically. If this is worth fixing it should be decided by size or height, never
-  by the object's name, so it generalises past kitchens.
-- Object orientation is whatever Tripo produced. The wooden spoon stands on end. There is no
-  rotation applied beyond `rotationY`, and nothing inspects which way is "up" for a given mesh.
-- Contact shadow strength is a guess (0.5 centre, 0.22 mid). Unverified against a real screen.
+- Contact shadow strength is a guess (0.5 centre, 0.22 mid). Unverified against a real screen, and
+  a one-line change once someone can see one.
 
 ### Performance and weight
 - `splat-full_res.spz` is **23 MB**. The ladder now climbs 100k → 500k → full_res, so the room is
@@ -55,3 +51,10 @@ trusting a document instead of the store.
 - **Gifts walking backwards through their stages.** Overlapping ticks raced, and the slower one
   won by writing last. Found by seeding, would have hit real senders.
 - **A fabricated link.** A TinyURL that never existed, handed over as if real.
+- **Objects facing the wrong way.** Two separate faults needing two rules: flat slivers standing on
+  edge (a brass key upright), and long objects pointing away from the visitor because Tripo put
+  their long axis on Z, which is the direction the spawn faces. The sliver rule is deliberately
+  conservative - it moves 1 object in 44 and leaves the tin cup, hand broom, scarf and poster alone,
+  because nothing in the bounds tells a cup from a key.
+- **Everything on the worktop.** A kerosene stove belongs on the floor. Decided by size against the
+  visitor's own height, never by the object's name, so it means the same in a bedroom.

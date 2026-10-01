@@ -12,7 +12,7 @@ import {
   isTouchDevice,
   mergeSceneGeometry,
 } from "@/lib/firstPerson";
-import { findPerch, seatOnFloor } from "@/lib/seating";
+import { findPerch, orientFor, seatOnFloor } from "@/lib/seating";
 
 type Status = "loading" | "ready" | "error";
 
@@ -435,11 +435,42 @@ export default function WorldViewer({ world }: { world: World }) {
      * the object currently is, so running this twice cannot walk it across
      * the room.
      */
+    /**
+     * Turn an object so it reads as the thing it is.
+     *
+     * The rule itself lives in seating.ts, pure, so the offline probe runs the
+     * same code rather than a copy of it. This only applies the answer.
+     *
+     * Idempotent: the rotation is rebuilt from the stored value every time, so
+     * re-seating when the collider lands cannot compound it.
+     */
+    function orientObject(node: THREE.Object3D, spawn: { x: number; z: number }) {
+      const stored = (node.userData.giftObject as { rotationY?: number } | undefined)?.rotationY;
+      node.rotation.set(0, stored ?? 0, 0);
+
+      const box = new THREE.Box3().setFromObject(node);
+      if (box.isEmpty()) return;
+
+      const size = box.getSize(new THREE.Vector3());
+      const { lay, yaw } = orientFor(size, { x: node.position.x, z: node.position.z }, spawn);
+
+      if (lay) {
+        // Bring the thin axis up to vertical, so the object lies on its face.
+        const axis = lay === "x" ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(1, 0, 0);
+        node.rotateOnWorldAxis(axis, Math.PI / 2);
+      }
+      node.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), yaw);
+    }
+
     function seatObject(node: THREE.Object3D) {
       if (!player) return;
 
       const from = world.spawn?.[1] ?? 0;
       const spawn = { x: world.spawn?.[0] ?? 0, z: world.spawn?.[2] ?? 0, y: from };
+
+      // Before anything is measured: seating and the contact shadow are both
+      // computed from the box, and the box changes when the object turns.
+      orientObject(node, spawn);
 
       const measured = new THREE.Box3().setFromObject(node);
       if (measured.isEmpty()) return;
@@ -469,6 +500,10 @@ export default function WorldViewer({ world }: { world: World }) {
         { x: dx, z: dz },
         { height: size.y, radius: Math.max(size.x, size.z) * 0.5 },
         taken,
+        // A kerosene stove belongs on the floor; a bowl does not. Decided by
+        // size against the visitor's own height, never by what the thing is
+        // called, so it means the same in a bedroom as in a kitchen.
+        { preferFloor: size.y > eyeHeight * 0.18 },
       );
 
       let restY: number;
@@ -715,8 +750,9 @@ export default function WorldViewer({ world }: { world: World }) {
         if (disposed) return;
 
         gltf.scene.position.fromArray(obj.position);
-        gltf.scene.rotation.y = obj.rotationY ?? 0;
         gltf.scene.scale.setScalar(obj.scale ?? 1);
+        // Rotation is not set here: seatObject derives it, and needs the
+        // final position to do so.
         // Join the same queue as the splats and the occluder, drawn after
         // both, so the occluder's depth is already laid down to test against.
         gltf.scene.traverse((node) => {

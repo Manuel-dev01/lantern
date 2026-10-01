@@ -23,7 +23,7 @@ import { MeshBVH } from "three-mesh-bvh";
 
 import { readGift } from "../src/lib/gifts.ts";
 import { mergeSceneGeometry } from "../src/lib/firstPerson.ts";
-import { findPerch, seatOnFloor } from "../src/lib/seating.ts";
+import { findPerch, orientFor, seatOnFloor } from "../src/lib/seating.ts";
 
 const [id, colliderPath, objDir] = process.argv.slice(2);
 if (!id || !colliderPath || !objDir) {
@@ -165,6 +165,20 @@ for (const o of gift.world.objects ?? []) {
   const spec = (gift.objects ?? []).find((s) => s.modelUrl === o.modelUrl);
   const accessorMinY = spec?.meshBounds ? spec.meshBounds.min[1] * (o.scale ?? 1) : NaN;
 
+  // The same two decisions the viewer makes, from the same functions, so this
+  // tests the real behaviour instead of a drifting copy.
+  const scale = o.scale ?? 1;
+  const dim = {
+    x: (local.max.x - local.min.x) * scale,
+    y: (local.max.y - local.min.y) * scale,
+    z: (local.max.z - local.min.z) * scale,
+  };
+  const orient = orientFor(dim, { x: o.position[0], z: o.position[2] }, spawnXZ);
+
+  // Laying a sliver down swaps its height for the axis that went up.
+  const seatedHeight = orient.lay ? (orient.lay === "x" ? dim.x : dim.z) : dim.y;
+  const eyeHeight = Math.max(spawnY - (gift.bounds?.min[1] ?? 0), 1e-3);
+
   const perch = findPerch(
     surfaces,
     { ...spawnXZ, y: spawnY },
@@ -174,11 +188,9 @@ for (const o of gift.world.objects ?? []) {
       const l = Math.hypot(dx, dz) || 1;
       return { x: dx / l, z: dz / l };
     })(),
-    {
-      height: (local.max.y - local.min.y) * (o.scale ?? 1),
-      radius: Math.max(local.max.x - local.min.x, local.max.z - local.min.z) * (o.scale ?? 1) * 0.5,
-    },
+    { height: seatedHeight, radius: Math.max(dim.x, dim.z) * 0.5 },
     picked,
+    { preferFloor: seatedHeight > eyeHeight * 0.18 },
   );
   if (perch) picked.push({ x: perch.x, z: perch.z });
 
@@ -199,6 +211,7 @@ for (const o of gift.world.objects ?? []) {
 
   console.log(
     `${(o.caption ?? name).padEnd(26)}\n` +
+      `   turn              lay=${orient.lay ?? "none"} yaw=${((orient.yaw * 180) / Math.PI).toFixed(0)}deg   height ${seatedHeight.toFixed(3)} of eye ${eyeHeight.toFixed(2)}\n` +
       `   rests at          ${seat.y.toFixed(3)}  ${perch ? (perch.raised ? "ON FURNITURE" : "on the floor") : "floor fallback"}${perch ? ` at ${perch.x.toFixed(2)},${perch.z.toFixed(2)}` : ""}\n` +
       `   true min.y*scale   ${(local.min.y * (o.scale ?? 1)).toFixed(3)}   accessor min.y*scale ${accessorMinY.toFixed(3)}${transformed ? "  <- node transforms present" : ""}\n` +
       `   Box3 min.y before  ${before.min.y.toFixed(3)}\n` +

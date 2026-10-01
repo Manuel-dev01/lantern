@@ -136,6 +136,7 @@ export function findPerch(
     arcSteps = 11,
     spacing = 0.25,
     raisedBy = 0.15,
+    preferFloor = false,
   }: {
     near?: number;
     far?: number;
@@ -144,6 +145,8 @@ export function findPerch(
     arcSteps?: number;
     spacing?: number;
     raisedBy?: number;
+    /** Big things belong on the floor. See the caller for where the line is. */
+    preferFloor?: boolean;
   } = {},
 ): Perch | null {
   const target = (near + far) / 2;
@@ -172,9 +175,19 @@ export function findPerch(
       const raised = rest.y - rest.floor > raisedBy;
 
       // A surface someone would actually put something on beats the floor,
-      // and open floor beats the dark underneath of a cupboard.
-      let score = raised ? 100 : rest.surfaces === 1 ? 50 : 0;
-      score += (rest.y - rest.floor) * 20;
+      // and open floor beats the dark underneath of a cupboard - unless the
+      // object is too big to have been lifted onto anything, in which case
+      // the floor is where it would be.
+      let score = raised
+        ? preferFloor
+          ? 0
+          : 100
+        : rest.surfaces === 1
+          ? preferFloor
+            ? 100
+            : 50
+          : 0;
+      score += (rest.y - rest.floor) * (preferFloor ? -20 : 20);
 
       // On furniture, nearer is better; on the floor, mid-range is.
       //
@@ -251,4 +264,69 @@ function restingHeight(
   }
 
   return null;
+}
+
+/** Which way to turn an object so it reads as the thing it is. */
+export interface Orientation {
+  /** The horizontal axis to bring up to vertical, laying a sliver down. */
+  lay: "x" | "z" | null;
+  /** Radians about Y, applied after any lay-down. */
+  yaw: number;
+}
+
+/**
+ * How extreme a sliver has to be before it is certainly standing wrong.
+ *
+ * Nothing in an object's bounds distinguishes a cup, which belongs upright,
+ * from a key, which does not. So this only moves things too extreme to be
+ * anything else: measured across fourteen real objects, 0.3 catches a brass
+ * key at 0.127 and leaves the tin cup at 0.88, the hand broom at 0.96, the
+ * wool scarf and the curling poster exactly as they are.
+ */
+const SLIVER = 0.3;
+
+/**
+ * Two faults, two rules, because one rule for both breaks whatever the other
+ * fixes:
+ *
+ *   A. A flat sliver standing on its edge - a key balanced upright. Its thin
+ *      axis is horizontal and its longest vertical. Lay it down.
+ *   B. A long object pointing away from the visitor. Tripo puts plenty of
+ *      them on Z, which is the direction the spawn faces, so a tray or a
+ *      stool foreshortens into an unreadable blob. Turn the long side across
+ *      the view rather than along it.
+ *
+ * Pure, and separate from the viewer, so the offline probe exercises the same
+ * code the browser runs rather than a copy that can drift from it.
+ */
+export function orientFor(
+  size: { x: number; y: number; z: number },
+  at: { x: number; z: number },
+  spawn: { x: number; z: number },
+): Orientation {
+  const smallest = Math.min(size.x, size.y, size.z);
+  const largest = Math.max(size.x, size.y, size.z);
+
+  const lay: Orientation["lay"] =
+    size.y === largest && smallest !== size.y && smallest / largest < SLIVER
+      ? smallest === size.x
+        ? "x"
+        : "z"
+      : null;
+
+  // What the footprint becomes once it is lying down: the laid axis trades
+  // places with height.
+  const flat =
+    lay === "x"
+      ? { x: size.y, z: size.z }
+      : lay === "z"
+        ? { x: size.x, z: size.y }
+        : { x: size.x, z: size.z };
+
+  // Square the long side across the line from the spawn, so the whole length
+  // of the thing is visible instead of receding away from the visitor.
+  const along = flat.x >= flat.z ? 0 : Math.PI / 2;
+  const toObject = Math.atan2(at.z - spawn.z, at.x - spawn.x);
+
+  return { lay, yaw: toObject + Math.PI / 2 - along };
 }
