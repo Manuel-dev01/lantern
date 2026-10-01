@@ -19,6 +19,7 @@ export type GiftStage =
   | "world_generating"
   | "world_mirroring"
   | "objects_generating"
+  | "rigging"
   | "ready"
   | "failed";
 
@@ -36,6 +37,17 @@ export interface GiftObjectSpec {
    * the store to find out how big it is.
    */
   meshBounds?: { min: [number, number, number]; max: [number, number, number] };
+  /**
+   * Rigging, for the one or two things in a gift that could be alive.
+   *
+   * Most of what a memory contains is a pan or a bowl, and Tripo will say so
+   * when asked. `riggable` records that answer so it is asked once, not on
+   * every tick for the rest of the gift's life.
+   */
+  riggable?: boolean;
+  rigTaskId?: string;
+  animateTaskId?: string;
+
   /** Creation attempts so far. Tripo rate-limits, and a retry is not a failure. */
   attempts?: number;
   error?: string;
@@ -123,6 +135,8 @@ export function stageLabel(stage: GiftStage): string {
       return "bringing it closer";
     case "objects_generating":
       return "finding the things that mattered";
+    case "rigging":
+      return "teaching one of them to move";
     case "ready":
       return "ready";
     case "failed":

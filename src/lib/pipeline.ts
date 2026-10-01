@@ -67,6 +67,8 @@ export async function advance(gift: Gift): Promise<AdvanceResult> {
         return await mirrorWorld(gift);
       case "objects_generating":
         return await buildObjects(gift);
+      case "rigging":
+        return await rigHeroes(gift);
       default:
         return { gift, changed: false };
     }
@@ -290,6 +292,15 @@ const OBJECT_BUDGET = {
   pbr: false,
 } as const;
 
+/**
+ * How many things in one gift are allowed to move.
+ *
+ * Rigging costs credits and minutes per object, and a room where everything
+ * moves is a toy rather than a memory. One or two is what makes a room feel
+ * inhabited.
+ */
+const MAX_RIGGED = 2;
+
 /** Statuses Tripo will not move on from. */
 const TRIPO_DEAD = ["failed", "cancelled", "banned", "expired", "unknown"];
 
@@ -438,6 +449,127 @@ async function buildObjects(gift: Gift): Promise<AdvanceResult> {
       // produced it: "the enamel cup", not a paragraph of model direction.
       caption: spec.name ?? spec.prompt,
     }));
+  }
+
+  return await settle(gift, "rigging");
+}
+
+/**
+ * Teach one or two things in the room to move.
+ *
+ * A gift that is entirely still reads as a diorama. One thing breathing makes
+ * the whole room feel inhabited, which is why STRATEGY asks for this on a
+ * couple of hero objects rather than on everything: it costs credits and
+ * minutes per object, and most of what a memory contains is a pan or a bowl
+ * that has no business moving.
+ *
+ * Tripo decides what is riggable, not us. `rigCheck` is asked once per object
+ * and the answer is kept, because a bowl will not become riggable later.
+ *
+ * Three calls per hero, one per tick, same as every other stage:
+ *
+ *   rigCheck -> rigModel -> retargetAnimation
+ *
+ * The animated GLB replaces the still one, so the viewer never has to know
+ * which objects are alive - it plays whatever clips arrive inside the file.
+ *
+ * Nothing here can fail a gift. A room full of still objects is the thing we
+ * already had; this is the part that is allowed not to work.
+ */
+async function rigHeroes(gift: Gift): Promise<AdvanceResult> {
+  const specs = gift.objects ?? [];
+  const built = specs.filter((spec) => spec.modelUrl && spec.taskId);
+  if (!built.length) return await settle(gift, "ready");
+
+  const client = createTripoClient();
+
+  // ---- 1. ask once which of them could move ------------------------------
+  const unasked = built.find((spec) => spec.riggable === undefined);
+  if (unasked) {
+    try {
+      const checkId = await client.rigCheck({ input: unasked.taskId! });
+      // Short next to the 300s tick budget. A rig check answers in seconds;
+      // anything slower than this is not worth holding a gift open for.
+      const task = await client.waitForTask(checkId, { timeoutMs: 60_000 });
+      unasked.riggable = Boolean(task.output?.riggable);
+    } catch (err) {
+      // Could not tell, so treat it as still. Better a quiet room than a
+      // gift stuck on a question nobody asked for.
+      console.warn(`Lantern: rig check failed for ${unasked.name}`, err);
+      unasked.riggable = false;
+    }
+    await writeGift(gift);
+    return { gift, changed: true };
+  }
+
+  const heroes = built.filter((spec) => spec.riggable).slice(0, MAX_RIGGED);
+
+  // ---- 2. rig the next one that has not been rigged -----------------------
+  const unrigged = heroes.find((spec) => !spec.rigTaskId);
+  if (unrigged) {
+    try {
+      unrigged.rigTaskId = await client.rigModel({
+        input: unrigged.taskId!,
+        out_format: "glb",
+        spec: "tripo",
+      });
+    } catch (err) {
+      console.warn(`Lantern: could not rig ${unrigged.name}`, err);
+      unrigged.riggable = false;
+    }
+    await writeGift(gift);
+    return { gift, changed: true };
+  }
+
+  // ---- 3. animate, then swap the still model for the moving one -----------
+  for (const hero of heroes) {
+    if (!hero.rigTaskId || hero.animateTaskId) continue;
+
+    try {
+      const rigged = await client.getTask(hero.rigTaskId);
+      if (!TRIPO_DEAD.includes(rigged.status) && rigged.status !== "success") {
+        return { gift, changed: false };
+      }
+      if (rigged.status !== "success") throw new Error(rigged.error_msg ?? "rig failed");
+
+      hero.animateTaskId = await client.retargetAnimation({
+        input: hero.rigTaskId,
+        animation: "preset:idle",
+        out_format: "glb",
+        bake_animation: true,
+      });
+    } catch (err) {
+      console.warn(`Lantern: could not animate ${hero.name}`, err);
+      hero.riggable = false;
+    }
+    await writeGift(gift);
+    return { gift, changed: true };
+  }
+
+  for (const hero of heroes) {
+    if (!hero.animateTaskId) continue;
+
+    const task = await client.getTask(hero.animateTaskId);
+    if (!TRIPO_DEAD.includes(task.status) && task.status !== "success") {
+      return { gift, changed: false };
+    }
+
+    if (task.status === "success") {
+      const downloaded = await client.downloadModel(task);
+      if (downloaded) {
+        const filename = `alive-${hero.taskId}.glb`;
+        await mirrorToBlob(downloaded.url, giftAssetPath(gift.id, filename));
+
+        // The placed object points at the moving version from here on.
+        const placed = gift.world?.objects?.find((o) => o.id === hero.taskId);
+        if (placed) placed.modelUrl = assetHref(gift, filename);
+      }
+    }
+
+    // Either way this hero is finished with.
+    hero.riggable = false;
+    await writeGift(gift);
+    return { gift, changed: true };
   }
 
   return await settle(gift, "ready");

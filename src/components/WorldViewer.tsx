@@ -695,6 +695,15 @@ export default function WorldViewer({ world }: { world: World }) {
         seatObject(gltf.scene);
         objectsIn++;
 
+        // Anything Tripo rigged and animated arrives with its clips inside
+        // the GLB, so the viewer does not need to be told which objects are
+        // alive - it just plays whatever it is handed.
+        if (gltf.animations.length) {
+          const mixer = new THREE.AnimationMixer(gltf.scene);
+          mixer.clipAction(gltf.animations[0]).play();
+          mixers.push(mixer);
+        }
+
         if (obj.audioUrl) {
           const size = new THREE.Box3().setFromObject(gltf.scene).getSize(new THREE.Vector3());
           attachVoice(gltf.scene, obj.audioUrl, Math.max(size.x, size.z) * 0.5);
@@ -726,6 +735,9 @@ export default function WorldViewer({ world }: { world: World }) {
     };
     window.addEventListener("resize", onResize);
 
+    /** One per animated object, stepped every frame. */
+    const mixers: THREE.AnimationMixer[] = [];
+
     // Reused each frame rather than allocated sixty times a second.
     const listenerAt = new THREE.Vector3();
     const voiceAt = new THREE.Vector3();
@@ -738,6 +750,13 @@ export default function WorldViewer({ world }: { world: World }) {
 
       controls?.update();
       player?.update(deltaMs);
+
+      // Seconds, and clamped: a backgrounded tab hands back a delta of
+      // minutes, which would otherwise fast-forward every clip on return.
+      if (mixers.length) {
+        const step = Math.min(deltaMs, 100) / 1000;
+        for (const mixer of mixers) mixer.update(step);
+      }
 
       // Voice notes play because you walked towards the thing they are about.
       // The distance model does the fading; this only decides when to start,
