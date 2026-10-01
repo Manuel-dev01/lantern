@@ -36,7 +36,15 @@ export async function POST(request: Request, ctx: RouteContext<"/api/gifts/[id]/
     return Response.json({ error: "This gift has nothing in it yet." }, { status: 409 });
   }
 
-  const form = await request.formData();
+  // Anything that is not a multipart body throws here rather than returning
+  // something inspectable, which turned a malformed request into a 500.
+  let form: FormData;
+  try {
+    form = await request.formData();
+  } catch {
+    return Response.json({ error: "Expected a recording." }, { status: 400 });
+  }
+
   const objectId = String(form.get("objectId") ?? "");
   const audio = form.get("audio");
 
