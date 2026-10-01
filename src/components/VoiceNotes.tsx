@@ -114,8 +114,12 @@ export default function VoiceNotes({
   }
 
   return (
-    <div className="absolute inset-0 z-20 grid place-items-center overflow-y-auto bg-[#05060a] px-6 py-10">
-      <div className="w-full max-w-md">
+    // Centred when it fits, scrolled from the top when it does not. `grid
+    // place-items-center` with overflow does the first and silently clips the
+    // top for the second, which on a phone with five objects means the
+    // heading and the first two rows are unreachable.
+    <div className="absolute inset-0 z-20 flex justify-center overflow-y-auto overscroll-contain bg-[#05060a] px-6 py-10">
+      <div className="my-auto w-full max-w-md">
         <p className="text-sm tracking-[0.2em] text-white/35 uppercase">before you send it</p>
         <h2 className="mt-5 text-xl leading-relaxed text-white/90">
           Say something about each of these.
