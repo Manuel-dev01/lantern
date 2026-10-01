@@ -138,9 +138,12 @@ export default function WorldViewer({ world }: { world: World }) {
   // Both are knowable at mount, so they are computed once in the initialiser
   // rather than set from inside the effect, which would cost a second render.
   // Safe to touch window here: the viewer is only ever loaded with ssr: false.
-  const [walkable] = useState(
-    () => new URLSearchParams(window.location.search).get("mode") !== "orbit",
-  );
+  const [walkable] = useState(() => {
+    const q = new URLSearchParams(window.location.search);
+    // A pinned camera is a photograph, so no invitation to walk is drawn over
+    // it - that caption would otherwise land in every asset board still.
+    return q.get("mode") !== "orbit" && !q.get("cam");
+  });
   const [touch] = useState(isTouchDevice);
   // The collider is by far the heaviest asset and gates walking entirely,
   // so its arrival is worth its own state and its own progress number.
@@ -240,6 +243,38 @@ export default function WorldViewer({ world }: { world: World }) {
     );
     camera.position.fromArray(world.spawn ?? [0, 1.6, 3]);
 
+    /**
+     * An exact camera, for frames that have to be reproducible.
+     *
+     * The asset board is a required deliverable and several judges read it as
+     * a portfolio piece, so its stills need composing rather than catching -
+     * and a frame caught by walking cannot be recovered after a reload, let
+     * alone matched across two levels of detail or before and after a change.
+     *
+     *   ?cam=0.6,0.0,0.5&look=-0.2,-0.3,-0.9
+     *
+     * The HUD prints both numbers in exactly this order, so a good frame found
+     * by walking can be read off the screen and pinned.
+     */
+    const triple = (value: string | null) => {
+      const parts = (value ?? "").split(",").map(Number);
+      return parts.length === 3 && parts.every(Number.isFinite)
+        ? (parts as [number, number, number])
+        : null;
+    };
+
+    const fixedCamera = triple(params.get("cam"));
+    const fixedLook = triple(params.get("look"));
+    if (fixedCamera) camera.position.fromArray(fixedCamera);
+    if (fixedLook) {
+      // A direction, matching what the HUD prints, rather than a target point.
+      camera.lookAt(
+        camera.position.x + fixedLook[0],
+        camera.position.y + fixedLook[1],
+        camera.position.z + fixedLook[2],
+      );
+    }
+
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(mount.clientWidth, mount.clientHeight);
@@ -268,7 +303,12 @@ export default function WorldViewer({ world }: { world: World }) {
     let controls: OrbitControls | null = null;
     let player: FirstPersonController | null = null;
 
-    if (orbitMode) {
+    // A pinned camera means neither: the walker rewrites the camera every
+    // frame from the capsule, and orbit damping drifts it. A frame asked for
+    // by number has to stay exactly where it was asked for.
+    if (fixedCamera) {
+      // Nothing to attach. The camera is already where it was told to be.
+    } else if (orbitMode) {
       controls = new OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
       // Look at the middle of the world, not a fixed point. Marble worlds are
