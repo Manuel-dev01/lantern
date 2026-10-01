@@ -301,6 +301,16 @@ const OBJECT_BUDGET = {
  */
 const MAX_RIGGED = 2;
 
+/**
+ * The rig model version, passed explicitly because the server default is dead.
+ *
+ * Sending no version makes Tripo pick `v2.5-20250123`, which it then rejects
+ * itself: "invalid model 'v2.5-20250123', allowed values: v1.0-20240301,
+ * v2.5-20260210". The SDK sets nothing, so there is no default to rely on and
+ * every rig call has to name one.
+ */
+const RIG_VERSION = "v2.5-20260210";
+
 /** Statuses Tripo will not move on from. */
 const TRIPO_DEAD = ["failed", "cancelled", "banned", "expired", "unknown"];
 
@@ -512,6 +522,7 @@ async function rigHeroes(gift: Gift): Promise<AdvanceResult> {
         input: unrigged.taskId!,
         out_format: "glb",
         spec: "tripo",
+        model_version: RIG_VERSION,
       });
     } catch (err) {
       console.warn(`Lantern: could not rig ${unrigged.name}`, err);
@@ -537,6 +548,7 @@ async function rigHeroes(gift: Gift): Promise<AdvanceResult> {
         animation: "preset:idle",
         out_format: "glb",
         bake_animation: true,
+        model_version: RIG_VERSION,
       });
     } catch (err) {
       console.warn(`Lantern: could not animate ${hero.name}`, err);
