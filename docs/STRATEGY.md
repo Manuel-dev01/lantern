@@ -900,3 +900,38 @@ credits remain, which is roughly seventy more full gifts. It takes about **20 ti
 world is done, so roughly four minutes start to finish. The wait screen counts them off - *"finding the things that mattered 2 of 4"* -
 because this is the longest stage and a number is the difference between a wait that is working
 and one that has hung.
+
+---
+
+## Phase 3 - auto-rig, and where it stops (Oct 1)
+
+Rigging is implemented as a pipeline stage and it degrades to nothing, which is the only reason
+it is safe to ship in this state. Measured against the live API:
+
+| step | result |
+|---|---|
+| `rigCheck` | works, **costs 0 credits**, correctly refuses a frying pan |
+| `rigModel` | works, with both `spec: tripo` and `spec: mixamo` |
+| `retargetAnimation` | **fails**, `1004 Invalid input parameter`, on every variant tried |
+
+**The SDK sends no model version and Tripo's own default is dead.** Omitting it makes the API
+pick `v2.5-20250123` and then reject it: *"invalid model 'v2.5-20250123', allowed values:
+v1.0-20240301, v2.5-20260210"*. Every rig call has to name a version explicitly. That cost one
+wasted generation to find.
+
+**The animation names are fine; the rig is what retarget rejects.** `preset:idle` and
+`preset:walk` are accepted at task creation and then fail during processing, while `idle`,
+`Idle` and `preset:breathing_idle` are rejected outright as invalid names. The test subject was
+a plush rabbit, which `rigCheck` calls `biped` - and a toy rabbit is not really a biped, so the
+skeleton it produces plausibly does not satisfy a humanoid preset.
+
+**Which matters less than it looks, because of a rule we wrote ourselves.** The LLM system
+prompt says NO PEOPLE, so the objects in a real gift are pans, bowls, spoons and stoves. None of
+them are riggable, and `rigCheck` says so for nothing. Auto-rig will almost never fire in a gift
+made through the real flow.
+
+So the stage stands, correct and inert: it asks once, skips what cannot move, and a failure
+anywhere in it leaves the gift exactly as it was. Making something genuinely alive in a room
+needs either a riggable subject the NO PEOPLE rule currently forbids, or a different idea.
+
+Total cost of finding all this: **130 Tripo credits.**
