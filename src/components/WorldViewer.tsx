@@ -190,6 +190,12 @@ export default function WorldViewer({ world }: { world: World }) {
     const ORDER = { splat: 0, occluder: 1, shadow: 2, gift: 3 };
 
     /**
+     * Long enough that walking back past an object does not restart it
+     * mid-sentence, short enough that coming back later plays it again.
+     */
+    const VOICE_COOLDOWN_MS = 20_000;
+
+    /**
      * A soft dark disc, laid on the floor under each object.
      *
      * Without one an object that is genuinely touching the floor still reads
@@ -287,6 +293,47 @@ export default function WorldViewer({ world }: { world: World }) {
       // Stand on the bounding box straight away. The real collider is several
       // megabytes and would otherwise leave the player frozen until it lands.
       if (world.bounds) player.setProvisionalBounds(world.bounds.min, world.bounds.max);
+    }
+
+    /**
+     * The sender's voice, placed where the object is.
+     *
+     * Marble makes the room and Tripo makes the pan; only the person who sent
+     * it can say what the pan was for. Attaching that to the object rather
+     * than playing it over the whole world is the point - you hear it because
+     * you walked towards the thing it is about, which is a sentence no menu
+     * can deliver.
+     *
+     * Browsers will not start audio without a gesture. The "step inside"
+     * button is one, which is why the door earns its place twice.
+     */
+    const listener = new THREE.AudioListener();
+    camera.add(listener);
+    const voices: THREE.PositionalAudio[] = [];
+
+    function attachVoice(node: THREE.Object3D, url: string, radius: number) {
+      const sound = new THREE.PositionalAudio(listener);
+      // Audible from roughly a conversation away, falling off naturally after
+      // that rather than cutting out at a boundary.
+      sound.setRefDistance(Math.max(radius * 2, 0.35));
+      sound.setRolloffFactor(2.5);
+      sound.setDistanceModel("inverse");
+      sound.setLoop(false);
+
+      new THREE.AudioLoader().load(
+        url,
+        (buffer) => {
+          if (disposed) return;
+          sound.setBuffer(buffer);
+          node.add(sound);
+          voices.push(sound);
+        },
+        undefined,
+        () => {
+          // A missing voice note is not a broken gift; the object still stands.
+          console.warn(`Lantern: could not load the voice note at ${url}`);
+        },
+      );
     }
 
     scene.add(new THREE.AmbientLight(0xffffff, 0.8));
@@ -647,8 +694,29 @@ export default function WorldViewer({ world }: { world: World }) {
         placed.push(gltf.scene);
         seatObject(gltf.scene);
         objectsIn++;
+
+        if (obj.audioUrl) {
+          const size = new THREE.Box3().setFromObject(gltf.scene).getSize(new THREE.Vector3());
+          attachVoice(gltf.scene, obj.audioUrl, Math.max(size.x, size.z) * 0.5);
+        }
       }
     }
+
+    /**
+     * Browsers keep audio muted until the person does something.
+     *
+     * Walking into a room is not a gesture as far as a browser is concerned,
+     * so the first real touch or click anywhere unlocks it - the click that
+     * grabs pointer lock, or the first thumb on the joystick. Without this a
+     * voice note plays silently and nobody ever knows it was there.
+     */
+    const unlockAudio = () => {
+      // three's own typing for this is looser than the real thing.
+      const context = listener.context as unknown as globalThis.AudioContext;
+      if (context.state === "suspended") void context.resume();
+    };
+    window.addEventListener("pointerdown", unlockAudio, { passive: true });
+    window.addEventListener("keydown", unlockAudio);
 
     const onResize = () => {
       if (!mount.clientWidth || !mount.clientHeight) return;
@@ -658,6 +726,10 @@ export default function WorldViewer({ world }: { world: World }) {
     };
     window.addEventListener("resize", onResize);
 
+    // Reused each frame rather than allocated sixty times a second.
+    const listenerAt = new THREE.Vector3();
+    const voiceAt = new THREE.Vector3();
+
     let lastFrame = performance.now();
     renderer.setAnimationLoop(() => {
       const now = performance.now();
@@ -666,6 +738,25 @@ export default function WorldViewer({ world }: { world: World }) {
 
       controls?.update();
       player?.update(deltaMs);
+
+      // Voice notes play because you walked towards the thing they are about.
+      // The distance model does the fading; this only decides when to start,
+      // and the cooldown stops a note restarting every time you step back and
+      // forth across its edge.
+      if (voices.length) {
+        camera.getWorldPosition(listenerAt);
+        for (const sound of voices) {
+          if (sound.isPlaying || !sound.parent) continue;
+          sound.parent.getWorldPosition(voiceAt);
+          if (listenerAt.distanceTo(voiceAt) > sound.getRefDistance() * 3) continue;
+
+          const last = (sound.userData.lastPlayed as number | undefined) ?? -Infinity;
+          if (now - last < VOICE_COOLDOWN_MS) continue;
+          sound.userData.lastPlayed = now;
+          sound.play();
+        }
+      }
+
       renderer.render(scene, camera);
 
       if (player && showHud && hudRef.current) {
@@ -686,6 +777,11 @@ export default function WorldViewer({ world }: { world: World }) {
     return () => {
       disposed = true;
       abort.abort();
+      window.removeEventListener("pointerdown", unlockAudio);
+      window.removeEventListener("keydown", unlockAudio);
+      for (const sound of voices) {
+        if (sound.isPlaying) sound.stop();
+      }
       renderer.setAnimationLoop(null);
       window.removeEventListener("resize", onResize);
       controls?.dispose();

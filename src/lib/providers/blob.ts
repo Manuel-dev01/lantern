@@ -55,6 +55,28 @@ export async function mirrorToBlob(
   return { url: result.url, bytes: data.byteLength, data };
 }
 
+/**
+ * Store bytes we were handed rather than bytes we fetched.
+ *
+ * A voice note arrives from the sender's microphone, not from a provider, so
+ * there is no URL to mirror. Same fixed-pathname rule as everything else: a
+ * re-recording replaces the previous take instead of leaving it behind.
+ */
+export async function writeBlobBytes(
+  pathname: string,
+  data: Buffer | Uint8Array,
+  contentType: string,
+): Promise<{ url: string; bytes: number }> {
+  const result = await put(pathname, Buffer.from(data), {
+    access: "public",
+    token: token(),
+    addRandomSuffix: false,
+    allowOverwrite: true,
+    contentType,
+  });
+  return { url: result.url, bytes: data.byteLength };
+}
+
 /** True when this exact pathname is already in the store. */
 export async function blobExists(pathname: string): Promise<boolean> {
   try {

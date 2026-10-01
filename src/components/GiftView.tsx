@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import Threshold from "@/components/Threshold";
+import VoiceNotes from "@/components/VoiceNotes";
+import { isMine } from "@/lib/mine";
 import { type Gift, stageLabel } from "@/lib/gifts";
 
 const WorldViewer = dynamic(() => import("@/components/WorldViewer"), { ssr: false });
@@ -42,6 +44,16 @@ export default function GiftView({ gift }: { gift: Gift }) {
    * `?enter=1` skips it, which the screenshot script and any debug link need -
    * otherwise every capture is a photograph of the card.
    */
+  /** Whether this browser is the one that made this gift. */
+  const [mine, setMine] = useState(false);
+  const [recorded, setRecorded] = useState(false);
+
+  // localStorage is not readable while rendering on the server, so this is
+  // settled after mount rather than in the initialiser.
+  useEffect(() => {
+    setMine(isMine(gift.id));
+  }, [gift.id]);
+
   const [entered, setEntered] = useState(
     () =>
       typeof window !== "undefined" &&
@@ -90,12 +102,32 @@ export default function GiftView({ gift }: { gift: Gift }) {
   }, [gift.id, done, router]);
 
   if (stage === "ready" && gift.world) {
+    const objects = gift.world.objects ?? [];
+
     return (
       <div className="relative h-full w-full">
         {/* Mounted now, behind the card, so the world's several megabytes are
             downloading while the visitor reads whose gift this is. */}
         <WorldViewer world={gift.world} />
-        {entered ? null : <Threshold gift={gift} onEnter={() => setEntered(true)} />}
+
+        {/* The sender is offered the microphone; the recipient never is.
+            Being asked to record a message onto a gift you were given makes
+            no sense, and there is no login to tell them apart - only the fact
+            that one of the two browsers is the one that made it. */}
+        {mine && !recorded && objects.length ? (
+          <VoiceNotes
+            giftId={gift.id}
+            objects={objects}
+            onDone={() => {
+              setRecorded(true);
+              // The voices were just written to the gift, and the world on
+              // screen was built before they existed.
+              router.refresh();
+            }}
+          />
+        ) : entered ? null : (
+          <Threshold gift={gift} onEnter={() => setEntered(true)} />
+        )}
       </div>
     );
   }

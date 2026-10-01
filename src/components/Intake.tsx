@@ -1,6 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+
+import { rememberMine } from "@/lib/mine";
 import { useEffect, useRef, useState } from "react";
 
 /**
@@ -83,6 +85,9 @@ export default function Intake() {
       if (!res.ok || !data.id) {
         throw new Error(data.error ?? "The world could not be started.");
       }
+      // So this browser is offered the chance to leave a voice on it, and
+      // whoever it is sent to is not.
+      rememberMine(data.id);
       router.push(`/g/${data.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
