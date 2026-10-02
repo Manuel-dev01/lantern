@@ -6,7 +6,7 @@ import {
   readGift,
   writeGift,
 } from "./gifts.ts";
-import { listBlobs, mirrorToBlob } from "./providers/blob.ts";
+import { listBlobs, mirrorToBlob } from "./providers/storage.ts";
 import { parseGlbBounds, placeObjects, spawnFromBounds } from "./providers/glb.ts";
 import { createTripoClient } from "./providers/tripo.ts";
 import {

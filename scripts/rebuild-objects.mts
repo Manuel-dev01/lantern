@@ -13,7 +13,7 @@
 
 import { advance } from "../src/lib/pipeline.ts";
 import { readGift, writeGift, stageLabel } from "../src/lib/gifts.ts";
-import { deleteBlobs, listBlobs } from "../src/lib/providers/blob.ts";
+import { deleteBlobs, listBlobs } from "../src/lib/providers/storage.ts";
 
 const id = process.argv[2];
 if (!id) {

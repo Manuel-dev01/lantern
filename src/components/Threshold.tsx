@@ -1,6 +1,6 @@
 "use client";
 
-import { type Gift } from "@/lib/gifts";
+import { type Gift, readableName } from "@/lib/gifts";
 
 /**
  * The moment the whole project exists for.
@@ -26,15 +26,15 @@ export default function Threshold({
   onEnter: () => void;
 }) {
   // A gift can be made without either name, and it must still read as a gift.
-  const maker = gift.fromName?.trim();
+  const maker = readableName(gift.fromName);
   const opening = maker ? `${maker} made a place for you.` : "Someone made a place for you.";
 
   return (
     <div className="absolute inset-0 z-10 grid place-items-center bg-[#05060a] px-6">
       <div className="max-w-md text-center">
-        {gift.toName?.trim() ? (
+        {readableName(gift.toName) ? (
           <p className="text-sm tracking-[0.2em] text-white/35 uppercase">
-            for {gift.toName.trim()}
+            for {readableName(gift.toName)}
           </p>
         ) : null}
 

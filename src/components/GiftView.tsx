@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import Threshold from "@/components/Threshold";
 import VoiceNotes from "@/components/VoiceNotes";
 import { isMine } from "@/lib/mine";
-import { type Gift, stageLabel } from "@/lib/gifts";
+import { type Gift, readableName, stageLabel } from "@/lib/gifts";
 
 const WorldViewer = dynamic(() => import("@/components/WorldViewer"), { ssr: false });
 
@@ -146,9 +146,9 @@ export default function GiftView({ gift }: { gift: Gift }) {
   return (
     <div className="grid h-full w-full place-items-center px-6">
       <div className="max-w-md text-center">
-        {gift.toName ? (
+        {readableName(gift.toName) ? (
           <p className="text-sm tracking-wide text-white/40">
-            for {gift.toName}
+            for {readableName(gift.toName)}
           </p>
         ) : null}
 
@@ -180,9 +180,9 @@ export default function GiftView({ gift }: { gift: Gift }) {
           </p>
         ) : null}
 
-        {gift.fromName && stage !== "failed" ? (
+        {readableName(gift.fromName) && stage !== "failed" ? (
           <p className="mt-10 text-sm tracking-wide text-white/40">
-            from {gift.fromName}
+            from {readableName(gift.fromName)}
           </p>
         ) : null}
       </div>

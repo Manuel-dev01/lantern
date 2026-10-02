@@ -9,7 +9,7 @@
  *   node --env-file=.env scripts/reindex-shared.mts
  */
 
-import { listBlobs, readBlobJson } from "../src/lib/providers/blob.ts";
+import { listBlobs, readBlobJson } from "../src/lib/providers/storage.ts";
 import { writeSharedIndex, type Gift, type SharedCard } from "../src/lib/gifts.ts";
 
 const docs = (await listBlobs("gifts/")).filter((b) => b.pathname.endsWith(".json"));

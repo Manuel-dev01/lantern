@@ -1,5 +1,5 @@
 import { giftAssetPath, readGift, writeGift } from "@/lib/gifts";
-import { writeBlobBytes } from "@/lib/providers/blob";
+import { writeBlobBytes } from "@/lib/providers/storage";
 
 /**
  * Attach a recorded voice note to one object in a gift.

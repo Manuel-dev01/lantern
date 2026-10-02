@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { readSharedIndex } from "@/lib/gifts";
+import { readableName, readSharedIndex } from "@/lib/gifts";
 
 /**
  * Every gift whose sender chose to show it.
@@ -74,11 +74,11 @@ export default async function ConstellationPage() {
 
                   <div className="px-4 py-4">
                     <p className="text-sm text-white/75">
-                      {gift.toName?.trim() ? `For ${gift.toName.trim()}` : "For someone"}
+                      {readableName(gift.toName) ? `For ${readableName(gift.toName)}` : "For someone"}
                     </p>
-                    {gift.fromName?.trim() ? (
+                    {readableName(gift.fromName) ? (
                       <p className="mt-1 text-xs tracking-wide text-white/35">
-                        from {gift.fromName.trim()}
+                        from {readableName(gift.fromName)}
                       </p>
                     ) : null}
                   </div>

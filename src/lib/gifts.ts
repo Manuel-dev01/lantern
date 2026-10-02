@@ -1,5 +1,5 @@
 import type { World } from "./types";
-import { deleteBlobs, listBlobs, readBlobJson, writeBlobJson } from "./providers/blob.ts";
+import { deleteBlobs, listBlobs, readBlobJson, writeBlobJson } from "./providers/storage.ts";
 
 /**
  * A gift: the thing a visitor makes and sends.
@@ -262,4 +262,22 @@ export async function listSharedGifts(limit = 60): Promise<Gift[]> {
   return gifts
     .filter((gift): gift is Gift => Boolean(gift?.shared && gift.stage === "ready" && gift.world))
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+}
+
+/**
+ * A name as it should be read back, after the word that was already there.
+ *
+ * The intake asks "Who is this for?", and a person answers the question they
+ * were asked: *for my bro*. Every surface then prepends "for" to it and the
+ * gift opens addressed to **for for my bro**. The same goes for "from".
+ *
+ * Stripped when it is read, never when it is stored - what someone typed is
+ * theirs, and a later change of mind about the wording should not have to
+ * repair old gifts.
+ *
+ * Only a whole leading word is removed, so Forrest and Tomi keep their names.
+ */
+export function readableName(name: string | undefined): string {
+  const trimmed = name?.trim() ?? "";
+  return trimmed.replace(/^(for|to|from)\s+/i, "").trim();
 }

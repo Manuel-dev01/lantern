@@ -20,14 +20,27 @@ import { routes, type VercelConfig } from "@vercel/config/v1";
  * Worlds are immutable once generated - a gift never changes after it is sent -
  * so the assets can be cached as hard as the CDN allows.
  */
-const BLOB_HOST = "https://5qgtncatzt22bvcl.public.blob.vercel-storage.com";
+/**
+ * Where the browser fetches assets from.
+ *
+ * Cloudflare R2, not Vercel Blob. Blob's store was blocked about a day into a
+ * billing period for exceeding its free allowance, and the cause was egress
+ * rather than space: a gift's full-resolution splat is 23 MB and every view
+ * pulls it. R2 charges nothing for egress, which is the whole reason for the
+ * move - judging runs for three weeks with judges opening gifts, so the same
+ * cap would have been reached again at the worst possible moment.
+ *
+ * From the environment because the bucket's public host is account-specific,
+ * and because a wrong value here fails as a blank world rather than an error.
+ */
+const ASSET_HOST = (process.env.R2_PUBLIC_URL ?? "").replace(/\/$/, "");
 
 export const config: VercelConfig = {
   framework: "nextjs",
   rewrites: [
-    routes.rewrite("/worlds/(.*)", `${BLOB_HOST}/worlds/$1`),
+    routes.rewrite("/worlds/(.*)", `${ASSET_HOST}/worlds/$1`),
     // Visitor-generated gifts, same reasoning as worlds above.
-    routes.rewrite("/gifts/(.*)", `${BLOB_HOST}/gifts/$1`),
+    routes.rewrite("/gifts/(.*)", `${ASSET_HOST}/gifts/$1`),
   ],
   headers: [
     routes.cacheControl("/worlds/(.*)", {
@@ -36,8 +49,8 @@ export const config: VercelConfig = {
       immutable: true,
     }),
     // Gift *assets* are immutable once written. The gift document itself is
-    // not, but that is read server-side through the Blob API and never
-    // through this path.
+    // not, but that is read server-side through the S3 API and never through
+    // this path.
     routes.cacheControl("/gifts/(.*).spz", {
       public: true,
       maxAge: "1 year",

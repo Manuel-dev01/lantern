@@ -12,7 +12,7 @@
  *   node --env-file=.env scripts/drive-gifts.mts
  */
 
-import { listBlobs, readBlobJson } from "../src/lib/providers/blob.ts";
+import { listBlobs, readBlobJson } from "../src/lib/providers/storage.ts";
 import type { Gift } from "../src/lib/gifts.ts";
 
 const BASE = process.env.LANTERN_BASE_URL ?? "https://lantern-manuel-dev01s-projects.vercel.app";

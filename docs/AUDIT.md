@@ -22,11 +22,12 @@ is not lost. Needs: which gift id, what was wrong, and a screenshot if it is vis
 - Mobile has never been measured. STRATEGY's target is ≥30fps and first frame under 10s on a
   mid-range Android over cellular. Untested.
 
-### Consistency between readers
-Two readers in different places can see different versions of the same Blob document for a short
-window. A gift shared in one place is not instantly shared everywhere, and the constellation can
-lag a minute behind the toggle. Nothing depends on it being instant, but it reads as broken to
-whoever just ticked the box.
+### A failed read looks like a missing gift
+`readBlobJson` catches everything and returns null, so a storage outage became "No such gift" from
+the API, and `GiftView` ignores a non-OK tick silently - leaving the page frozen on its last known
+state for ever. That is how the store being blocked presented: a gift stuck on "finding the things
+that mattered 0 of 5" with nothing anywhere saying why. **The wait screen should say when it has
+stopped hearing back.**
 
 ### Auto-rig
 Implemented, correct, and effectively inert — see the Phase 3 section in STRATEGY. `rigCheck` and

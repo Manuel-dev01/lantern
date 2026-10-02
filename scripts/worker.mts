@@ -18,7 +18,7 @@
  *   BLOB_READ_WRITE_TOKEN=... LANTERN_BASE_URL=... node scripts/worker.mts
  */
 
-import { listBlobs, readBlobJson } from "../src/lib/providers/blob.ts";
+import { listBlobs, readBlobJson } from "../src/lib/providers/storage.ts";
 import type { Gift } from "../src/lib/gifts.ts";
 
 const BASE = process.env.LANTERN_BASE_URL ?? "https://lantern-manuel-dev01s-projects.vercel.app";
