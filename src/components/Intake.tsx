@@ -57,6 +57,12 @@ export default function Intake() {
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
 
+  const [full] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).get("full") === "1",
+  );
+
   const step = STEPS[index];
   const value = answers[step.key] ?? "";
   const last = index === STEPS.length - 1;
@@ -79,6 +85,14 @@ export default function Intake() {
           toName: answers.toName,
           fromName: answers.fromName,
           memory: answers.memory,
+          // `/make?full=1` builds the good world: about five and a half
+          // minutes and 1,580 credits, against twenty-seven seconds and 200
+          // for a draft. A stranger gets the draft, because a world that
+          // arrives is worth more to them than a sharper one that tests their
+          // patience - and because a busy day should not be able to spend the
+          // balance in twenty-one gifts. The gifts that have to look their
+          // best are made deliberately.
+          model: full ? "marble-1.1" : undefined,
         }),
       });
       const data = (await res.json()) as { id?: string; error?: string };
