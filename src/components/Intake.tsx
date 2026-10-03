@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 
+import Atmosphere from "@/components/Atmosphere";
 import { rememberMine } from "@/lib/mine";
 import { useEffect, useRef, useState } from "react";
 
@@ -116,13 +117,37 @@ export default function Intake() {
   }
 
   return (
-    <div className="grid h-full w-full place-items-center px-6">
-      <div className="w-full max-w-lg">
-        <p className="text-xs tracking-[0.2em] text-white/25">
-          {String(index + 1)} OF {STEPS.length}
+    <div className="relative grid h-full w-full place-items-center overflow-hidden bg-[#05060a] px-6">
+      {/* The same slit of light as the front page, so writing a memory happens
+          in the same room the worlds are seen in. */}
+      <Atmosphere preset="slit" />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            "linear-gradient(to right,#05060a 0%,transparent 65%),linear-gradient(to top,#05060a 4%,transparent 40%)",
+        }}
+      />
+
+      <div className="relative w-full max-w-lg">
+        <p className="font-mono text-[11px] tracking-[0.2em] text-white/30">
+          {String(index + 1)} / {STEPS.length}
         </p>
 
-        <h1 className="mt-6 text-2xl leading-snug text-white/90">{step.question}</h1>
+        <h1
+          style={{
+            margin: "1.5rem 0 0",
+            fontFamily: "var(--font-newsreader), Georgia, serif",
+            fontWeight: 300,
+            fontSize: "clamp(28px, 3.4vw, 44px)",
+            lineHeight: 1.15,
+            letterSpacing: "-.015em",
+            color: "rgba(255,255,255,.92)",
+          }}
+        >
+          {step.question}
+        </h1>
 
         {step.hint ? (
           <p className="mt-3 text-sm leading-relaxed text-white/40">{step.hint}</p>
@@ -144,7 +169,13 @@ export default function Intake() {
                 next();
               }
             }}
-            className="mt-8 w-full resize-none border-b border-white/15 bg-transparent pb-3 text-lg leading-relaxed text-white/90 outline-none placeholder:text-white/20 focus:border-white/40"
+            style={{
+              fontFamily: "var(--font-newsreader), Georgia, serif",
+              fontWeight: 300,
+              fontSize: "clamp(18px, 2vw, 22px)",
+              lineHeight: 1.6,
+            }}
+            className="mt-8 w-full resize-none border-b border-white/15 bg-transparent pb-3 text-white/90 transition-colors duration-700 outline-none placeholder:text-white/20 focus:border-[rgba(255,236,210,.45)]"
           />
         ) : (
           <input
@@ -156,7 +187,12 @@ export default function Intake() {
             onKeyDown={(e) => {
               if (e.key === "Enter") next();
             }}
-            className="mt-8 w-full border-b border-white/15 bg-transparent pb-3 text-lg text-white/90 outline-none placeholder:text-white/20 focus:border-white/40"
+            style={{
+              fontFamily: "var(--font-newsreader), Georgia, serif",
+              fontWeight: 300,
+              fontSize: "clamp(18px, 2vw, 22px)",
+            }}
+            className="mt-8 w-full border-b border-white/15 bg-transparent pb-3 text-white/90 transition-colors duration-700 outline-none placeholder:text-white/20 focus:border-[rgba(255,236,210,.45)]"
           />
         )}
 
@@ -165,9 +201,9 @@ export default function Intake() {
             type="button"
             onClick={next}
             disabled={!enough || sending}
-            className="rounded-full bg-white/90 px-5 py-2 text-sm text-black transition disabled:cursor-not-allowed disabled:bg-white/15 disabled:text-white/30"
+            className="inline-flex rounded-full bg-[rgba(255,240,220,.92)] px-7 py-3 text-[15px] whitespace-nowrap text-[#05060a] transition-colors duration-700 hover:bg-[rgb(255,240,220)] disabled:cursor-not-allowed disabled:bg-white/12 disabled:text-white/30"
           >
-            {sending ? "starting…" : last ? "Build it" : "Next"}
+            {sending ? "starting…" : last ? "build it" : "next"}
           </button>
 
           {index > 0 && !sending ? (

@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import Atmosphere, { MemoryLight } from "@/components/Atmosphere";
 import Threshold from "@/components/Threshold";
 import VoiceNotes from "@/components/VoiceNotes";
 import { isMine } from "@/lib/mine";
@@ -144,44 +145,53 @@ export default function GiftView({ gift }: { gift: Gift }) {
   }
 
   return (
-    <div className="grid h-full w-full place-items-center px-6">
-      <div className="max-w-md text-center">
+    <div className="relative grid h-full w-full place-items-center overflow-hidden bg-[#05060a] px-6">
+      {/* The same light that is behind the door, because this is the same
+          room being built - the sender is already standing in the hallway. */}
+      <Atmosphere preset="memory">
+        <MemoryLight hue={52} chroma={0.1} y={54} tall />
+      </Atmosphere>
+
+      <div className="relative max-w-md text-center">
         {readableName(gift.toName) ? (
-          <p className="text-sm tracking-wide text-white/40">
+          <p className="text-[11px] tracking-[0.26em] text-white/60 uppercase">
             for {readableName(gift.toName)}
           </p>
         ) : null}
 
         {gift.memory ? (
-          <p className="mt-6 text-lg leading-relaxed text-white/80">
+          <blockquote
+            style={{
+              margin: "2rem 0 0",
+              fontFamily: "var(--font-newsreader), Georgia, serif",
+              fontStyle: "italic",
+              fontWeight: 300,
+              fontSize: "clamp(20px, 2.6vw, 30px)",
+              lineHeight: 1.35,
+              textWrap: "pretty",
+              color: "rgba(255,255,255,.9)",
+            }}
+          >
             &ldquo;{gift.memory}&rdquo;
-          </p>
+          </blockquote>
         ) : (
-          <p className="mt-6 text-lg leading-relaxed text-white/80">
-            A place is being made.
-          </p>
+          <p className="mt-8 text-lg leading-relaxed text-white/80">A place is being made.</p>
         )}
 
         <p className="mt-10 text-sm tracking-wide text-white/50">
-          {stage === "failed"
-            ? "something went wrong"
-            : `${stageLabel(stage)}…`}
+          {stage === "failed" ? "something went wrong" : `${stageLabel(stage)}…`}
           {/* Counting the things is the difference between a wait that is
               happening and a wait that has hung. Objects take the longest of
               any stage, so this is where it matters most. */}
-          {stage === "objects_generating" && toMake > 0
-            ? ` ${made} of ${toMake}`
-            : ""}
+          {stage === "objects_generating" && toMake > 0 ? ` ${made} of ${toMake}` : ""}
         </p>
 
         {stage === "failed" && error ? (
-          <p className="mt-3 font-mono text-xs leading-relaxed text-red-300/60">
-            {error}
-          </p>
+          <p className="mt-3 font-mono text-xs leading-relaxed text-red-300/60">{error}</p>
         ) : null}
 
         {readableName(gift.fromName) && stage !== "failed" ? (
-          <p className="mt-10 text-sm tracking-wide text-white/40">
+          <p className="mt-10 text-[11px] tracking-[0.24em] text-white/35 uppercase">
             from {readableName(gift.fromName)}
           </p>
         ) : null}
