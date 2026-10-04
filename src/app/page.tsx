@@ -26,6 +26,16 @@ import { readSharedIndex } from "@/lib/gifts";
  */
 
 const serif = "var(--font-newsreader), Georgia, serif";
+/**
+ * Rendered per request, because the cards show the real constellation.
+ *
+ * Statically prerendered, this page reads the shared index once at build time
+ * - which was an empty store - and then shows the written fallbacks for ever,
+ * however many gifts people go on to share. The page is light; the heavy part
+ * is a splat the browser fetches itself.
+ */
+export const dynamic = "force-dynamic";
+
 const gutter = "clamp(24px, 7vw, 112px)";
 
 /**
