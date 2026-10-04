@@ -23,7 +23,8 @@
     "gift:drive": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/drive-gifts.mts",
     "gift:reindex": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/reindex-shared.mts",
     "worker": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/worker.mts",
-    "world:hero": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/push-hero.mts"
+    "world:hero": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/push-hero.mts",
+    "sweep": "node scripts/sweep.mts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1145.0",
@@ -45,6 +46,7 @@
     "@vercel/config": "^0.7.2",
     "eslint": "^9",
     "eslint-config-next": "16.3.5",
+    "playwright-core": "^1.63.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   },

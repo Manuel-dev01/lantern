@@ -50,8 +50,8 @@ export interface FirstPersonOptions {
 export class FirstPersonController {
   readonly camera: THREE.PerspectiveCamera;
   private readonly domElement: HTMLElement;
-  private readonly eyeHeight: number;
-  private readonly floorY: number;
+  private eyeHeight: number;
+  private floorY: number;
   private readonly ceilingY: number | null;
   private readonly spawn: THREE.Vector3;
 
@@ -243,10 +243,44 @@ export class FirstPersonController {
     return typeof document !== "undefined" && document.pointerLockElement === this.domElement;
   }
 
-  /** Feeds the collider geometry in. Nobody can stand up before this lands. */
+  /**
+   * Feeds the collider geometry in. Nobody can stand up before this lands.
+   *
+   * It also corrects how tall the visitor is, which the bounding box cannot
+   * say. `floorY` starts as `bounds.min.y`, the lowest point of the whole
+   * collider - and a collider takes in whatever is visible through a window or
+   * a doorway, so that is routinely metres below the boards under the spawn.
+   * One real gift measured -1.31 against a floor of -0.63: an eye height twice
+   * what it should be, which put the capsule's feet under the floor and
+   * dropped the visitor out of the world the moment real collision arrived.
+   *
+   * The real floor is knowable the instant the mesh is here, so it is measured
+   * rather than assumed, and the visitor is stood on it.
+   */
   setCollider(geometry: THREE.BufferGeometry) {
     this.bvh = new MeshBVH(geometry);
     this.provisional = false;
+
+    // Cast from the spawn, which is where Marble's camera stood and so is
+    // indoors by definition. Anything above it risks finding a roof.
+    const ground = this.floorUnder(this.spawn.x, this.spawn.z, this.spawn.y);
+    if (!ground) return;
+
+    const measured = this.spawn.y - ground.y;
+    // Ignore an answer that is not credible - a ray that slipped through a gap
+    // in the mesh should not make the visitor an inch tall or a giant.
+    if (!(measured > 0.05) || measured > (this.spawn.y - this.floorY) * 3) return;
+
+    this.floorY = ground.y;
+    this.eyeHeight = measured;
+
+    // Stand them on it. Without this the capsule keeps the height it was built
+    // with until something moves it, which is the fall this exists to prevent.
+    if (this.position.y < ground.y + measured) {
+      this.position.y = ground.y + measured;
+      this.velocity.y = 0;
+      this.onGround = true;
+    }
   }
 
   /**

@@ -407,6 +407,22 @@ export default function WorldViewer({ world }: { world: World }) {
     const placed: THREE.Object3D[] = [];
 
     /**
+     * How wrong the server's idea of a person's height turned out to be.
+     *
+     * Objects are sized on the server as a fraction of eye height, and eye
+     * height there is the drop from the spawn to `bounds.min.y` - the lowest
+     * point of the whole collider, which reaches through windows and doorways
+     * to ground well below the room. One real gift measured 1.31 against a
+     * true 0.63, so every object in it came out twice the size it should be: a
+     * pincushion like a football.
+     *
+     * The real figure is knowable the moment the collider lands, so everything
+     * is rescaled by the ratio. 1 until then, and 1 for ever if the measure
+     * turns out not to be credible.
+     */
+    let sizeCorrection = 1;
+
+    /**
      * Rest an object on the floor that is actually under it.
      *
      * The server places objects on `bounds.min.y`, the lowest point of the
@@ -704,6 +720,27 @@ export default function WorldViewer({ world }: { world: World }) {
         if (collision) player?.setCollider(collision);
         setGround(true);
 
+        // Now the real floor is knowable, so correct how big a person is -
+        // and therefore how big everything made relative to one should be.
+        const under = player?.floorUnder(
+          world.spawn?.[0] ?? 0,
+          world.spawn?.[2] ?? 0,
+          world.spawn?.[1] ?? 0,
+        );
+        if (under) {
+          const realEye = (world.spawn?.[1] ?? 0) - under.y;
+          const ratio = realEye / eyeHeight;
+          // Only act on a believable correction. A ray through a gap in the
+          // mesh should not shrink the room's contents to nothing.
+          if (realEye > 0.05 && ratio > 0.2 && ratio < 5 && Math.abs(ratio - 1) > 0.05) {
+            sizeCorrection = ratio;
+            for (const node of placed) {
+              const spec = node.userData.giftObject as { scale?: number } | undefined;
+              node.scale.setScalar((spec?.scale ?? 1) * ratio);
+            }
+          }
+        }
+
         // Objects that arrived before the collider were placed on the
         // bounding box's floor, which is not the floor. Now there is a real
         // surface to sit on, they are re-seated on it.
@@ -750,7 +787,7 @@ export default function WorldViewer({ world }: { world: World }) {
         if (disposed) return;
 
         gltf.scene.position.fromArray(obj.position);
-        gltf.scene.scale.setScalar(obj.scale ?? 1);
+        gltf.scene.scale.setScalar((obj.scale ?? 1) * sizeCorrection);
         // Rotation is not set here: seatObject derives it, and needs the
         // final position to do so.
         // Join the same queue as the splats and the occluder, drawn after
