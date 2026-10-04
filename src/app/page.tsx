@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import Atmosphere from "@/components/Atmosphere";
+import HeroWorld from "@/components/landing/HeroWorld";
 import { BuildStatus, TheDoor, VoiceNoteList } from "@/components/landing/Showcase";
 import { MEMORIES } from "@/lib/landing";
 
@@ -25,11 +26,25 @@ import { MEMORIES } from "@/lib/landing";
 const serif = "var(--font-newsreader), Georgia, serif";
 const gutter = "clamp(24px, 7vw, 112px)";
 
+/**
+ * The room behind the hero.
+ *
+ * Pinned rather than "the latest world", because this one is chosen: a small
+ * interior that reads well out of focus and behind text. Only its splat is in
+ * storage - no collider, no objects - since nobody walks through the hero.
+ */
+const HERO_WORLD = "35b95a56-5688-40e0-ada8-0079f1038a71";
+
 export default function Home() {
   return (
     <main style={{ background: "#05060a", color: "rgba(255,255,255,.9)", overflowX: "hidden" }}>
       {/* ---- 01 Hero ---------------------------------------------------- */}
       <section style={{ position: "relative", minHeight: "100svh", overflow: "hidden" }}>
+        {/* A real generated room, under the designed light. Saying the product
+            builds places you can walk through, over an actual splat of one,
+            is the one claim on this page that proves itself. It fades in only
+            once decoded, so the page is complete without it. */}
+        <HeroWorld splatUrl={`/worlds/${HERO_WORLD}/splat-500k.spz`} />
         <Atmosphere preset="slit" />
         <div
           aria-hidden

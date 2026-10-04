@@ -22,7 +22,8 @@
     "gift:seed": "node scripts/seed-gift.mts",
     "gift:drive": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/drive-gifts.mts",
     "gift:reindex": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/reindex-shared.mts",
-    "worker": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/worker.mts"
+    "worker": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/worker.mts",
+    "world:hero": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/push-hero.mts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1145.0",
