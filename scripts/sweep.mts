@@ -45,6 +45,9 @@ const IGNORE = [
   /GL Driver Message/i,
   /Download the React DevTools/i,
   /favicon/i,
+  // Next cancels its own prefetches when you navigate away from a link it
+  // was warming. Normal, not a failure, and it was the loudest thing here.
+  /[?&]_rsc=/,
 ];
 
 interface Finding {

@@ -47,6 +47,16 @@ const gutter = "clamp(24px, 7vw, 112px)";
  */
 const HERO_WORLD = "35b95a56-5688-40e0-ada8-0079f1038a71";
 
+/**
+ * The room behind the hero: the smallest level of a real gift.
+ *
+ * 100k gaussians and 1.2 MB, against 500k and 4.8 MB before. At half opacity
+ * behind blurred light nobody can tell the two apart, and it is a fifth of the
+ * work on every frame - which was the whole cost of the page. It is also an
+ * actual gift someone can go and open, rather than a sample.
+ */
+const HERO_GIFT = "1KAJZTJBK1";
+
 export default async function Home() {
   /**
    * The real gallery, if there is one.
@@ -109,7 +119,7 @@ export default async function Home() {
             builds places you can walk through, over an actual splat of one,
             is the one claim on this page that proves itself. It fades in only
             once decoded, so the page is complete without it. */}
-        <HeroBackdrop splatUrl={`/worlds/${HERO_WORLD}/splat-500k.spz`} />
+        <HeroBackdrop splatUrl={`/gifts/${HERO_GIFT}/splat-100k.spz`} />
         <Atmosphere preset="slit" />
         <div
           aria-hidden

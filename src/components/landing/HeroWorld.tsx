@@ -39,7 +39,22 @@ export default function HeroWorld({ splatUrl }: { splatUrl: string }) {
     const saveData =
       (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData ===
       true;
-    if (saveData) return;
+
+    /**
+     * Only where it is affordable.
+     *
+     * Measured against the deployed page: with the splat drawing, the landing
+     * ran at **0 fps** and could not produce a single frame in twenty seconds;
+     * with it blocked, 60 fps and a frame in 416 ms. That was software
+     * rendering, so a real GPU fares far better - but it is the right shape of
+     * the cost, and a phone is much closer to the first number than the second.
+     *
+     * A coarse pointer or a thin CPU gets the designed light on its own, which
+     * is what the page was built to look like anyway.
+     */
+    const coarse = window.matchMedia("(pointer: coarse)").matches;
+    const thin = (navigator.hardwareConcurrency ?? 8) <= 4;
+    if (saveData || coarse || thin) return;
 
     let disposed = false;
     const abort = new AbortController();
@@ -123,8 +138,21 @@ export default function HeroWorld({ splatUrl }: { splatUrl: string }) {
     };
     document.addEventListener("visibilitychange", onVisibility);
 
+    /**
+     * Twenty frames a second, not sixty.
+     *
+     * This is a two-minute camera arc behind blurred light at half opacity.
+     * Nobody can see the difference, and it is two thirds of the work handed
+     * back to the rest of the page.
+     */
+    const MIN_FRAME_MS = 50;
+    let lastDrawn = 0;
+
     const frame = () => {
       if (!onScreen) return;
+      const now = performance.now();
+      if (now - lastDrawn < MIN_FRAME_MS) return;
+      lastDrawn = now;
       // A slow arc around where the capture camera stood, so the room has
       // parallax without ever looking like it is being driven. Two minutes
       // for a full pass.
