@@ -242,7 +242,14 @@ function restingHeight(
     // What is directly above it, and so how much room the object has. Open
     // air if nothing is: measuring this against eye height instead was what
     // kept a 35 cm stove off a counter with a metre of space above it.
-    const above = sorted.find((s) => s.y > surface.y + 1e-4)?.y ?? Infinity;
+    // The nearest surface above, not the highest one.
+    //
+    // `sorted` runs downwards, so `find` returned the first thing it met from
+    // the top - the roof - and every spot on a worktop was judged against the
+    // ceiling. A counter tucked under a wall cabinet always looked like it had
+    // metres of room, and objects were put in the gap.
+    const above =
+      [...sorted].reverse().find((s) => s.y > surface.y + 1e-4)?.y ?? Infinity;
     if (above - surface.y < object.height * 1.15) continue;
 
     // Mostly supported, not perfectly.
@@ -328,5 +335,13 @@ export function orientFor(
   const along = flat.x >= flat.z ? 0 : Math.PI / 2;
   const toObject = Math.atan2(at.z - spawn.z, at.x - spawn.x);
 
-  return { lay, yaw: toObject + Math.PI / 2 - along };
+  // Three rotates the other way round from atan2.
+  //
+  // A +Y rotation by t maps local +X to (cos t, 0, -sin t), whose compass
+  // angle is -t, while `toObject` is measured as atan2(dz, dx). Adding the
+  // quarter turn instead of subtracting it only agrees on the axes, so an
+  // object fanned out to either side had its long edge turned *along* the
+  // line of sight - exactly the foreshortening this exists to prevent, and
+  // invisible to the offline probe because it imports this same function.
+  return { lay, yaw: along - toObject - Math.PI / 2 };
 }

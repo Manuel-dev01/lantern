@@ -20,10 +20,12 @@ import type { GiftObject } from "@/lib/types";
 export default function VoiceNotes({
   giftId,
   objects,
+  alreadyShared = false,
   onDone,
 }: {
   giftId: string;
   objects: GiftObject[];
+  alreadyShared?: boolean;
   onDone: () => void;
 }) {
   const [recordingFor, setRecordingFor] = useState<string | null>(null);
@@ -34,7 +36,10 @@ export default function VoiceNotes({
     ),
   );
   const [error, setError] = useState<string | null>(null);
-  const [shared, setShared] = useState(false);
+  // Seeded from the gift, not assumed false. A sender who had already
+  // published reopened the link, saw an unticked box, believed it was private
+  // and left it alone - while it stayed in the constellation.
+  const [shared, setShared] = useState(alreadyShared);
 
   const recorder = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
@@ -99,11 +104,16 @@ export default function VoiceNotes({
   async function share(next: boolean) {
     setShared(next);
     try {
-      await fetch(`/api/gifts/${giftId}/share`, {
+      const res = await fetch(`/api/gifts/${giftId}/share`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ shared: next }),
       });
+      // A 404 or a 500 resolves the promise perfectly happily. Without this
+      // the box stayed ticked and the sender was told their memory's room was
+      // published when nothing had been recorded - which is the one outcome
+      // a consent control must never have.
+      if (!res.ok) throw new Error(String(res.status));
     } catch {
       // Put the box back rather than claiming something was shared when it
       // was not - this is a consent control, so a silent failure is the one
@@ -120,11 +130,11 @@ export default function VoiceNotes({
     // heading and the first two rows are unreachable.
     <div className="absolute inset-0 z-20 flex justify-center overflow-y-auto overscroll-contain bg-[#05060a] px-6 py-10">
       <div className="my-auto w-full max-w-md">
-        <p className="text-sm tracking-[0.2em] text-white/35 uppercase">before you send it</p>
+        <p className="text-sm tracking-[0.2em] text-white/55 uppercase">before you send it</p>
         <h2 className="mt-5 text-xl leading-relaxed text-white/90">
           Say something about each of these.
         </h2>
-        <p className="mt-3 text-sm leading-relaxed text-white/45">
+        <p className="mt-3 text-sm leading-relaxed text-white/55">
           They will hear it when they walk up to it. A sentence is plenty.
         </p>
 
@@ -145,7 +155,7 @@ export default function VoiceNotes({
                   type="button"
                   disabled={isSaving || (recordingFor !== null && !isRecording)}
                   onClick={() => (isRecording ? stop() : start(object.id))}
-                  className={`shrink-0 rounded-full border px-4 py-1.5 text-xs tracking-wide transition disabled:opacity-30 ${
+                  className={`inline-flex min-h-11 shrink-0 items-center rounded-full border px-5 py-2.5 text-xs tracking-wide transition disabled:opacity-30 ${
                     isRecording
                       ? "border-red-400/60 text-red-300"
                       : "border-white/20 text-white/70 hover:border-white/50 hover:text-white"
@@ -165,8 +175,12 @@ export default function VoiceNotes({
         {/* Asked here because this is the first moment the sender knows what
             they would be sharing. Off unless they say otherwise: the memory
             box invites people to write something true about one other person,
-            and a full gallery is not worth publishing that by default. The
-            memory itself is never shown in the constellation either way. */}
+            and a full gallery is not worth publishing that by default.
+            
+            The wording used to promise the memory was never shown. That was
+            false - a card links to the gift, and the gift's door renders the
+            memory to anyone who opens it. A consent control that understates
+            what it consents to is worse than none. */}
         <label className="mt-8 flex cursor-pointer items-start gap-3 text-left">
           <input
             type="checkbox"
@@ -174,9 +188,10 @@ export default function VoiceNotes({
             onChange={(event) => void share(event.target.checked)}
             className="mt-0.5 h-4 w-4 shrink-0 accent-white/80"
           />
-          <span className="text-xs leading-relaxed text-white/45">
-            Show this place in the constellation. Only the room and their name — never what
-            you wrote.
+          <span className="text-xs leading-relaxed text-white/55">
+            Show this place in the constellation. The gallery lists the room and their name,
+            and anyone who opens it reads the memory, exactly as they would if you sent them
+            the link.
           </span>
         </label>
 

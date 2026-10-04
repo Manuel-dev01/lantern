@@ -1,6 +1,6 @@
 import { after } from "next/server";
 
-import { readGift, stageLabel } from "@/lib/gifts";
+import { readGift, stageLabel, writeGift } from "@/lib/gifts";
 import { advanceWithLease } from "@/lib/pipeline";
 
 /**
@@ -26,6 +26,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/gifts/[id]/
   const { id } = await ctx.params;
 
   const gift = await readGift(id);
+  const before = gift?.stage;
   if (!gift) {
     return Response.json({ error: "No such gift." }, { status: 404 });
   }
@@ -64,6 +65,13 @@ export async function POST(request: Request, ctx: RouteContext<"/api/gifts/[id]/
     gift.stage = "world_mirroring";
     gift.error = undefined;
   }
+
+  // Persist whatever the retry branches above just changed, *before* handing
+  // over. advanceWithLease re-reads the stored document to take its lease, so
+  // an in-memory stage reset was silently discarded and every retry path -
+  // the failed-gift button, ?retry, ?rebuild - was dead code: the gift went
+  // straight back into `default: changed false` and stayed failed for ever.
+  if (gift.stage !== before) await writeGift(gift);
 
   const { gift: updated, changed, busy } = await advanceWithLease(gift);
 

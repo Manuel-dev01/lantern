@@ -131,7 +131,7 @@ export default function Intake() {
       />
 
       <div className="relative w-full max-w-lg">
-        <p className="font-mono text-[11px] tracking-[0.2em] text-white/30">
+        <p className="font-mono text-[11px] tracking-[0.2em] text-white/50">
           {String(index + 1)} / {STEPS.length}
         </p>
 
@@ -150,7 +150,7 @@ export default function Intake() {
         </h1>
 
         {step.hint ? (
-          <p className="mt-3 text-sm leading-relaxed text-white/40">{step.hint}</p>
+          <p className="mt-3 text-sm leading-relaxed text-white/55">{step.hint}</p>
         ) : null}
 
         {step.multiline ? (
@@ -175,7 +175,7 @@ export default function Intake() {
               fontSize: "clamp(18px, 2vw, 22px)",
               lineHeight: 1.6,
             }}
-            className="mt-8 w-full resize-none border-b border-white/15 bg-transparent pb-3 text-white/90 transition-colors duration-700 outline-none placeholder:text-white/20 focus:border-[rgba(255,236,210,.45)]"
+            className="mt-8 w-full resize-none border-b border-white/15 bg-transparent pb-3 text-white/90 transition-colors duration-700 outline-none placeholder:text-white/55 focus:border-[rgba(255,236,210,.45)]"
           />
         ) : (
           <input
@@ -192,7 +192,7 @@ export default function Intake() {
               fontWeight: 300,
               fontSize: "clamp(18px, 2vw, 22px)",
             }}
-            className="mt-8 w-full border-b border-white/15 bg-transparent pb-3 text-white/90 transition-colors duration-700 outline-none placeholder:text-white/20 focus:border-[rgba(255,236,210,.45)]"
+            className="mt-8 w-full border-b border-white/15 bg-transparent pb-3 text-white/90 transition-colors duration-700 outline-none placeholder:text-white/55 focus:border-[rgba(255,236,210,.45)]"
           />
         )}
 
@@ -201,7 +201,7 @@ export default function Intake() {
             type="button"
             onClick={next}
             disabled={!enough || sending}
-            className="inline-flex rounded-full bg-[rgba(255,240,220,.92)] px-7 py-3 text-[15px] whitespace-nowrap text-[#05060a] transition-colors duration-700 hover:bg-[rgb(255,240,220)] disabled:cursor-not-allowed disabled:bg-white/12 disabled:text-white/30"
+            className="inline-flex rounded-full bg-[rgba(255,240,220,.92)] px-7 py-3 text-[15px] whitespace-nowrap text-[#05060a] transition-colors duration-700 hover:bg-[rgb(255,240,220)] disabled:cursor-not-allowed disabled:bg-white/12 disabled:text-white/50"
           >
             {sending ? "starting…" : last ? "build it" : "next"}
           </button>
@@ -210,7 +210,7 @@ export default function Intake() {
             <button
               type="button"
               onClick={() => setIndex((i) => i - 1)}
-              className="text-sm text-white/35 transition hover:text-white/60"
+              className="-m-2 inline-flex min-h-11 items-center p-2 text-sm text-white/55 transition hover:text-white/80"
             >
               back
             </button>
@@ -222,8 +222,8 @@ export default function Intake() {
         ) : null}
 
         {last && !error ? (
-          <p className="mt-10 text-xs leading-relaxed text-white/25">
-            Building takes about a minute. You will get a link to send them.
+          <p className="mt-10 text-xs leading-relaxed text-white/50">
+            Building takes a few minutes. You will get a link to send them.
           </p>
         ) : null}
       </div>

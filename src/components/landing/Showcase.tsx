@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import Atmosphere, { MemoryLight } from "@/components/Atmosphere";
@@ -18,7 +19,7 @@ import { MEMORIES } from "@/lib/landing";
  */
 
 /** A memory, shown as the recipient first meets it: a door with a name on it. */
-export function TheDoor() {
+export function TheDoor({ gifts = [] }: { gifts?: Array<{ id: string; toName?: string }> }) {
   const [index, setIndex] = useState(0);
 
   useEffect(() => {
@@ -37,16 +38,16 @@ export function TheDoor() {
         alignItems: "center",
       }}
     >
+      {/* Only the memory on screen keeps its light.
+          All three were mounted at once, which put six elements carrying
+          `filter: blur(50px)` on the page permanently - each one a render
+          surface the compositor re-blurs whenever anything above it animates.
+          Two of the three were always invisible. */}
       <Atmosphere preset="memory">
-        {MEMORIES.map((memory, k) => (
+        {MEMORIES.filter((_, k) => k === index).map((memory) => (
           <div
             key={memory.to}
-            style={{
-              position: "absolute",
-              inset: 0,
-              opacity: k === index ? 1 : 0,
-              transition: "opacity 3.5s ease",
-            }}
+            style={{ position: "absolute", inset: 0, transition: "opacity 3.5s ease" }}
           >
             <MemoryLight hue={memory.hue} chroma={memory.chroma} y={memory.y} tall={memory.tall} />
           </div>
@@ -91,6 +92,13 @@ export function TheDoor() {
                 pointerEvents: k === index ? "auto" : "none",
               }}
               aria-hidden={k !== index}
+              // Removes the hidden slides from the tab order entirely.
+              // opacity:0 with pointer-events:none still leaves anchors
+              // focusable, so tabbing the page landed on two invisible "step
+              // inside" links and Enter navigated away from nowhere. It also
+              // makes aria-hidden legal, which it is not over a focusable
+              // descendant.
+              {...(k === index ? {} : { inert: true })}
             >
               <div className="text-[11px] tracking-[0.26em] text-white/60 uppercase">
                 for {memory.to}
@@ -113,12 +121,21 @@ export function TheDoor() {
               >
                 &ldquo;{memory.text}&rdquo;
               </blockquote>
-              <a
-                href="/constellation"
+              {/* Opens the gift it is about, not a list.
+                  "step inside" on a card addressed to Mum used to go to the
+                  gallery - the page's centrepiece, and its button went
+                  somewhere else. Matched by name against what is actually
+                  shared, falling back to the gallery if that gift is gone. */}
+              <Link
+                href={
+                  gifts.find((g) => (g.toName ?? "").trim() === memory.to)
+                    ? `/g/${gifts.find((g) => (g.toName ?? "").trim() === memory.to)!.id}`
+                    : "/constellation"
+                }
                 className="mt-[18px] inline-flex rounded-full border border-white/30 px-8 py-3.5 text-[15px] whitespace-nowrap text-white/90 transition-all duration-1000 hover:border-[rgba(255,236,210,.55)] hover:bg-[rgba(255,236,210,.08)]"
               >
                 step inside
-              </a>
+              </Link>
             </div>
           ))}
         </div>
@@ -142,8 +159,8 @@ export function TheDoor() {
             onClick={() => setIndex(k)}
             aria-label={`Show the gift for ${memory.to}`}
             style={{
-              width: 28,
-              height: 28,
+              width: 44,
+              height: 44,
               padding: 0,
               border: 0,
               background: "transparent",
@@ -213,7 +230,13 @@ export function VoiceNoteList() {
   ];
 
   return (
-    <div style={{ flex: "1 1 340px", minWidth: 0, display: "flex", flexDirection: "column", gap: 14 }}>
+    <div
+      // Said once, plainly. Three rows with a duration and a moving waveform
+      // read as a player, and there is nothing to play - the real thing lives
+      // inside a gift.
+      aria-label="An illustration of voice notes left on objects"
+      style={{ flex: "1 1 340px", minWidth: 0, display: "flex", flexDirection: "column", gap: 14 }}
+    >
       {notes.map((note) => (
         <div
           key={note.label}
@@ -256,7 +279,7 @@ export function VoiceNoteList() {
             ))}
           </div>
 
-          <span className="font-mono text-xs text-white/40">{note.length}</span>
+          <span className="font-mono text-xs text-white/55">{note.length}</span>
         </div>
       ))}
     </div>

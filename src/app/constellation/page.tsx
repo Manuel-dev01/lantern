@@ -35,12 +35,12 @@ export default async function ConstellationPage() {
       }}
     >
       <nav className="mx-auto mb-[clamp(56px,9vh,96px)] flex max-w-5xl items-center justify-between gap-6">
-        <Link href="/" className="text-xs tracking-[0.3em] text-white/80 uppercase">
+        <Link href="/" className="-m-2 inline-flex min-h-11 items-center p-2 text-xs tracking-[0.3em] text-white/80 uppercase">
           lantern
         </Link>
         <Link
           href="/make"
-          className="text-xs tracking-[0.22em] text-white/45 uppercase transition hover:text-white/80"
+          className="-m-2 inline-flex min-h-11 items-center p-2 text-xs tracking-[0.22em] text-white/55 uppercase transition hover:text-white/80"
         >
           make one
         </Link>
@@ -48,7 +48,7 @@ export default async function ConstellationPage() {
 
       <div className="mx-auto max-w-5xl">
         <header className="flex flex-col gap-[18px]">
-          <div className="text-[11px] tracking-[0.24em] text-white/45 uppercase">
+          <div className="text-[11px] tracking-[0.24em] text-white/55 uppercase">
             the constellation
           </div>
           <p
@@ -71,7 +71,7 @@ export default async function ConstellationPage() {
           // An empty gallery should still say what it is for, rather than
           // reading as a page that failed to load.
           <div className="mt-24 text-center">
-            <p className="text-sm text-white/40">No one has shared a place yet.</p>
+            <p className="text-sm text-white/55">No one has shared a place yet.</p>
             <Link
               href="/make"
               className="mt-8 inline-flex rounded-full border border-white/25 px-7 py-3 text-xs tracking-[0.15em] text-white/80 uppercase transition-all duration-1000 hover:border-[rgba(255,236,210,.55)] hover:bg-[rgba(255,236,210,.08)]"
@@ -134,7 +134,7 @@ export default async function ConstellationPage() {
                         : "For someone"}
                     </div>
                     {readableName(gift.fromName) ? (
-                      <div className="text-[13px] text-white/40">
+                      <div className="text-[13px] text-white/55">
                         from {readableName(gift.fromName)}
                       </div>
                     ) : null}

@@ -161,10 +161,27 @@ async function visit(page: Page, screen: string, path: string, viewport: string,
   for (const e of [...new Set(consoleErrors)]) note(screen, viewport, "console error", e);
   for (const f of [...new Set(failures)].slice(0, 10)) note(screen, viewport, "request", f);
 
-  await page.screenshot({
-    path: join(OUT, `${screen}-${viewport}.png`),
-    fullPage: viewport === "desktop" && !path.startsWith("/g/"),
-  });
+  // Viewport-sized, animations frozen, and never allowed to kill the run.
+  //
+  // A full-page shot of the landing timed out at 30s: it is several screens
+  // tall, every section has large blurred layers, and a WebGL canvas is
+  // running behind it. That is worth knowing, but it is not worth losing the
+  // whole sweep to.
+  try {
+    await page.screenshot({
+      path: join(OUT, `${screen}-${viewport}.png`),
+      animations: "disabled",
+      caret: "hide",
+      timeout: 25_000,
+    });
+  } catch (err) {
+    note(
+      screen,
+      viewport,
+      "screenshot timed out",
+      `could not capture in 25s — ${err instanceof Error ? err.message.slice(0, 80) : ""}`,
+    );
+  }
 
   page.off("console", onConsole);
   page.off("pageerror", onPageError);
@@ -217,7 +234,11 @@ for (const viewport of VIEWPORTS) {
       .fill("The roof of the block of flats we grew up in, cracked concrete and aerials.");
     await page.getByRole("button", { name: /next/i }).click();
     await page.waitForTimeout(1200);
-    await page.screenshot({ path: join(OUT, `make-step3-${viewport.name}.png`) });
+    await page.screenshot({
+      path: join(OUT, `make-step3-${viewport.name}.png`),
+      animations: "disabled",
+      timeout: 25_000,
+    });
     await audit(page, "make-step3", viewport.name);
     console.log("done");
   } catch (err) {

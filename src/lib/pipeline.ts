@@ -83,6 +83,17 @@ export interface LeasedResult extends AdvanceResult {
  * create a Tripo task for it.
  */
 export async function advanceWithLease(gift: Gift): Promise<LeasedResult> {
+  // Nothing to do, so take no lease and write nothing.
+  //
+  // A finished gift is still polled - the client keeps asking until the world
+  // reaches it - and every one of those polls took a lease and wrote the whole
+  // document twice for a stage machine that was going to no-op. Those writes
+  // race with the voice and share routes, which take no lease, and a late one
+  // could resurrect an expired lease or revert a just-saved consent flag.
+  if (gift.stage === "ready" || gift.stage === "failed") {
+    return { gift, changed: false };
+  }
+
   const holder = crypto.randomUUID();
   const now = Date.now();
 
@@ -598,7 +609,17 @@ async function rigHeroes(gift: Gift): Promise<AdvanceResult> {
     return { gift, changed: true };
   }
 
-  const heroes = built.filter((spec) => spec.riggable).slice(0, MAX_RIGGED);
+  // Anything already taken up counts against the cap.
+  //
+  // Finishing a hero sets `riggable = false`, which dropped it out of this
+  // filter - so the slice refilled from behind and the next object stepped
+  // into its place. With six riggable objects all six were rigged and
+  // animated, spending the credits and the minutes the cap exists to bound.
+  const started = built.filter((spec) => spec.rigTaskId || spec.animateTaskId);
+  const heroes = [
+    ...started,
+    ...built.filter((spec) => spec.riggable && !spec.rigTaskId && !spec.animateTaskId),
+  ].slice(0, MAX_RIGGED);
 
   // ---- 2. rig the next one that has not been rigged -----------------------
   const unrigged = heroes.find((spec) => !spec.rigTaskId);

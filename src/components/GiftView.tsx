@@ -61,7 +61,32 @@ export default function GiftView({ gift }: { gift: Gift }) {
       new URLSearchParams(window.location.search).get("enter") === "1",
   );
 
-  const done = stage === "ready" || stage === "failed";
+  /**
+   * Stop polling only when there is nothing left to wait for.
+   *
+   * `ready` alone is not enough. The world arrives through a server re-render,
+   * and that refresh is fire-and-forget - if it is dropped, which is routine
+   * on a slow connection, the stage says ready, `gift.world` is still
+   * undefined, and the poll had already shut itself down. The result was a
+   * twenty-minute wait ending on the word "ready" for ever.
+   */
+  const done = (stage === "ready" && Boolean(gift.world)) || stage === "failed";
+
+  /** Consecutive failed polls. The pipeline is the poll, so this is a stall. */
+  const [silent, setSilent] = useState(0);
+
+  /**
+   * Follow the server when it disagrees with us.
+   *
+   * `stage` is seeded from the prop once and then owned locally, and `done`
+   * includes "failed" - so once a gift failed, polling stopped and nothing
+   * could ever move the screen off it again. A retry that worked perfectly
+   * well on the server left the visitor looking at "something went wrong".
+   */
+  useEffect(() => {
+    setStage(gift.stage);
+    setError(gift.error);
+  }, [gift.stage, gift.error]);
 
   useEffect(() => {
     if (done) return;
@@ -70,7 +95,17 @@ export default function GiftView({ gift }: { gift: Gift }) {
     async function tick() {
       try {
         const res = await fetch(`/api/gifts/${gift.id}/tick`, { method: "POST" });
-        if (!res.ok || cancelled) return;
+        if (cancelled) return;
+
+        // A non-ok answer is not nothing. Swallowing it is what left a gift
+        // frozen on "finding the things that mattered 2 of 4" for ever while
+        // the storage behind it was returning 403 - the poll *is* the
+        // pipeline, so a failing poll means nothing is happening at all.
+        if (!res.ok) {
+          setSilent((n) => n + 1);
+          return;
+        }
+        setSilent(0);
         const data = (await res.json()) as {
           stage: Gift["stage"];
           error?: string;
@@ -130,6 +165,7 @@ export default function GiftView({ gift }: { gift: Gift }) {
           <VoiceNotes
             giftId={gift.id}
             objects={objects}
+            alreadyShared={Boolean(gift.shared)}
             onDone={() => {
               setRecorded(true);
               // The voices were just written to the gift, and the world on
@@ -186,12 +222,42 @@ export default function GiftView({ gift }: { gift: Gift }) {
           {stage === "objects_generating" && toMake > 0 ? ` ${made} of ${toMake}` : ""}
         </p>
 
-        {stage === "failed" && error ? (
-          <p className="mt-3 font-mono text-xs leading-relaxed text-red-300/60">{error}</p>
+        {/* Said plainly, and only once it is clearly not a blip. The detail
+            stays small and monospaced: it is for whoever is debugging, not
+            for the person who was sent a gift. */}
+        {stage === "failed" ? (
+          <div className="mt-6">
+            <p className="text-sm leading-relaxed text-white/55">
+              Nothing was lost. This can usually be picked up where it stopped.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setSilent(0);
+                void fetch(`/api/gifts/${gift.id}/tick?retry=1`, { method: "POST" })
+                  .then(() => router.refresh())
+                  .catch(() => undefined);
+              }}
+              className="mt-6 inline-flex rounded-full border border-white/25 px-6 py-2.5 text-xs tracking-[0.15em] text-white/80 uppercase transition-all duration-700 hover:border-[rgba(255,236,210,.55)] hover:bg-[rgba(255,236,210,.08)]"
+            >
+              try again
+            </button>
+            {error ? (
+              <p className="mt-6 font-mono text-[10px] leading-relaxed text-white/50">{error}</p>
+            ) : null}
+          </div>
+        ) : null}
+
+        {/* Four misses is twenty seconds of hearing nothing back. */}
+        {stage !== "failed" && silent >= 4 ? (
+          <p className="mt-4 text-xs leading-relaxed text-white/55">
+            Still trying, but not hearing back. This page keeps going on its own — it is safe to
+            close and come back to the link.
+          </p>
         ) : null}
 
         {readableName(gift.fromName) && stage !== "failed" ? (
-          <p className="mt-10 text-[11px] tracking-[0.24em] text-white/35 uppercase">
+          <p className="mt-10 text-[11px] tracking-[0.24em] text-white/55 uppercase">
             from {readableName(gift.fromName)}
           </p>
         ) : null}

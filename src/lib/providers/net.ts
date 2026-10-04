@@ -17,18 +17,35 @@ export interface RetryOptions {
   attempts?: number;
   baseDelayMs?: number;
   label?: string;
+  /** Upper bound on a single attempt. See ATTEMPT_TIMEOUT_MS. */
+  timeoutMs?: number;
 }
+
+/**
+ * How long one attempt may hang before it is abandoned.
+ *
+ * Retrying was never the gap: a connection that accepts and then stalls never
+ * throws, so without a deadline an attempt waits for ever and the retry loop
+ * never gets its turn. Generous, because mirroring a 23 MB splat is one of
+ * these calls.
+ */
+const ATTEMPT_TIMEOUT_MS = 120_000;
 
 export async function fetchWithRetry(
   input: string | URL | Request,
   init?: RequestInit,
-  { attempts = 5, baseDelayMs = 2_000, label }: RetryOptions = {},
+  { attempts = 5, baseDelayMs = 2_000, label, timeoutMs = ATTEMPT_TIMEOUT_MS }: RetryOptions = {},
 ): Promise<Response> {
   let lastError: unknown;
 
   for (let attempt = 1; attempt <= attempts; attempt++) {
     try {
-      const res = await fetch(input, init);
+      // A caller's own signal still wins; this only adds an upper bound.
+      const timeout = AbortSignal.timeout(timeoutMs);
+      const signal = init?.signal
+        ? AbortSignal.any([init.signal, timeout])
+        : timeout;
+      const res = await fetch(input, { ...init, signal });
       if (!RETRYABLE_STATUS.has(res.status) || attempt === attempts) return res;
       note(label, attempt, attempts, `HTTP ${res.status}`);
     } catch (err) {

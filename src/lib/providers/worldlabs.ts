@@ -9,6 +9,7 @@
  */
 
 import { requireEnv } from "./env.ts";
+import { fetchWithRetry } from "./net.ts";
 
 export const BASE_URL = "https://api.worldlabs.ai";
 
@@ -37,7 +38,13 @@ export async function wlFetch<T = unknown>(
   path: string,
   init: RequestInit = {},
 ): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, {
+  // Retried and bounded, like every other provider call.
+  //
+  // This was the one that was not, and it is the one that runs inside the
+  // pipeline: a single dropped connection while polling Marble marked the
+  // whole gift failed, for ever, with the world already generated and paid
+  // for. One blip, one dead gift.
+  const res = await fetchWithRetry(`${BASE_URL}${path}`, {
     ...init,
     headers: {
       "WLT-Api-Key": requireEnv("WORLDLABS_API_KEY"),

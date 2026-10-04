@@ -2,10 +2,10 @@ import Link from "next/link";
 
 import Atmosphere from "@/components/Atmosphere";
 import Ambience from "@/components/landing/Ambience";
-import HeroWorld from "@/components/landing/HeroWorld";
+import HeroBackdrop from "@/components/landing/HeroBackdrop";
 import { BuildStatus, TheDoor, VoiceNoteList } from "@/components/landing/Showcase";
 import { MEMORIES } from "@/lib/landing";
-import { readSharedIndex } from "@/lib/gifts";
+import { readableName, readSharedIndex } from "@/lib/gifts";
 
 /**
  * The page a stranger lands on.
@@ -74,11 +74,16 @@ export default async function Home() {
     ? shared.map((gift, k) => ({
         key: gift.id,
         href: `/g/${gift.id}`,
-        to: gift.toName ?? "someone",
-        from: gift.fromName,
+        to: readableName(gift.toName) || "someone",
+        from: readableName(gift.fromName) || undefined,
         thumbnailUrl: gift.thumbnailUrl,
-        place: MEMORIES[k % MEMORIES.length].place,
+        // No invented caption on a real gift. The place label is written
+        // copy belonging to the three memories below; pinning it to a real
+        // card by index told visitors that someone else's room was a kitchen
+        // in Lagos, and the card opens into a different room entirely.
+        place: undefined as string | undefined,
         short: undefined as string | undefined,
+        // The tint is only ever seen when there is no capture to show.
         hue: MEMORIES[k % MEMORIES.length].hue,
         chroma: MEMORIES[k % MEMORIES.length].chroma,
         tall: MEMORIES[k % MEMORIES.length].tall,
@@ -104,7 +109,7 @@ export default async function Home() {
             builds places you can walk through, over an actual splat of one,
             is the one claim on this page that proves itself. It fades in only
             once decoded, so the page is complete without it. */}
-        <HeroWorld splatUrl={`/worlds/${HERO_WORLD}/splat-500k.spz`} />
+        <HeroBackdrop splatUrl={`/worlds/${HERO_WORLD}/splat-500k.spz`} />
         <Atmosphere preset="slit" />
         <div
           aria-hidden
@@ -131,12 +136,12 @@ export default async function Home() {
             zIndex: 2,
           }}
         >
-          <Link href="/" className="text-xs tracking-[0.3em] text-white/80 uppercase">
+          <Link href="/" className="-m-2 inline-flex min-h-11 items-center p-2 text-xs tracking-[0.3em] text-white/80 uppercase">
             lantern
           </Link>
           <Link
             href="/constellation"
-            className="text-xs tracking-[0.22em] text-white/45 uppercase transition hover:text-white/80"
+            className="-m-2 inline-flex min-h-11 items-center p-2 text-xs tracking-[0.22em] text-white/55 uppercase transition hover:text-white/80"
           >
             constellation
           </Link>
@@ -198,7 +203,7 @@ export default async function Home() {
             >
               make one
             </Link>
-            <Link href="/constellation" className="text-sm text-white/55 transition hover:text-white/90">
+            <Link href="/constellation" className="-m-2 inline-flex min-h-11 items-center p-2 text-sm text-white/55 transition hover:text-white/90">
               see what others have made
             </Link>
           </div>
@@ -216,7 +221,7 @@ export default async function Home() {
           margin: "0 auto",
         }}
       >
-        <div className="text-[11px] tracking-[0.24em] text-white/45 uppercase">the other end</div>
+        <div className="text-[11px] tracking-[0.24em] text-white/55 uppercase">the other end</div>
         <p
           style={{
             margin: 0,
@@ -236,7 +241,7 @@ export default async function Home() {
       </section>
 
       {/* ---- 03 The door -------------------------------------------------- */}
-      <TheDoor />
+      <TheDoor gifts={shared} />
 
       {/* ---- 04 How it works ---------------------------------------------- */}
       <section
@@ -249,7 +254,7 @@ export default async function Home() {
           gap: "clamp(88px, 14vh, 160px)",
         }}
       >
-        <div className="text-[11px] tracking-[0.24em] text-white/45 uppercase">
+        <div className="text-[11px] tracking-[0.24em] text-white/55 uppercase">
           how a place is made
         </div>
 
@@ -270,7 +275,7 @@ export default async function Home() {
               gap: 18,
             }}
           >
-            <div className="text-[11px] tracking-[0.24em] text-white/40 uppercase">the place</div>
+            <div className="text-[11px] tracking-[0.24em] text-white/55 uppercase">the place</div>
             <p
               style={{
                 margin: 0,
@@ -306,7 +311,7 @@ export default async function Home() {
                 borderTop: "1px solid rgba(255,255,255,.08)",
               }}
             >
-              <span className="text-sm text-white/45">for Tobi</span>
+              <span className="text-sm text-white/55">for Tobi</span>
               <span className="text-sm text-white/70">build it</span>
             </div>
           </div>
@@ -350,7 +355,7 @@ export default async function Home() {
                   "radial-gradient(ellipse 70% 60% at 60% 70%, oklch(0.58 0.15 45 / .3), transparent 70%), linear-gradient(to top, rgba(5,6,10,.85) 0%, transparent 60%)",
               }}
             />
-            <div className="absolute top-4 left-[18px] font-mono text-[11px] text-white/45">
+            <div className="absolute top-4 left-[18px] font-mono text-[11px] text-white/55">
               marble world capture · the roof
             </div>
             <BuildStatus />
@@ -387,7 +392,7 @@ export default async function Home() {
           }}
         >
           <div style={{ display: "flex", flexDirection: "column", gap: 18, maxWidth: 560 }}>
-            <div className="text-[11px] tracking-[0.24em] text-white/45 uppercase">
+            <div className="text-[11px] tracking-[0.24em] text-white/55 uppercase">
               the constellation
             </div>
             <p
@@ -406,7 +411,7 @@ export default async function Home() {
           </div>
           <Link
             href="/constellation"
-            className="text-sm whitespace-nowrap text-white/60 transition hover:text-white/90"
+            className="-m-2 inline-flex min-h-11 items-center p-2 text-sm whitespace-nowrap text-white/60 transition hover:text-white/90"
           >
             walk the constellation
           </Link>
@@ -470,9 +475,11 @@ export default async function Home() {
                     background: "linear-gradient(to top, rgba(5,6,10,.8) 0%, transparent 55%)",
                   }}
                 />
-                <div className="absolute top-3.5 right-4 left-4 font-mono text-[11px] text-white/40">
-                  world capture · {card.place}
-                </div>
+                {card.place ? (
+                  <div className="absolute top-3.5 right-4 left-4 font-mono text-[11px] text-white/55">
+                    world capture · {card.place}
+                  </div>
+                ) : null}
               </div>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -495,7 +502,7 @@ export default async function Home() {
                   </div>
                 ) : null}
                 {card.from ? (
-                  <div className="text-[13px] text-white/40">from {card.from}</div>
+                  <div className="text-[13px] text-white/55">from {card.from}</div>
                 ) : null}
               </div>
             </Link>
@@ -573,7 +580,7 @@ export default async function Home() {
           gap: "16px 32px",
           padding: `40px ${gutter} 48px`,
         }}
-        className="text-[11px] tracking-[0.22em] text-white/32 uppercase"
+        className="text-[11px] tracking-[0.22em] text-white/50 uppercase"
       >
         <span>lantern</span>
         <span>tripothon s1 · build a world as a gift</span>
@@ -617,7 +624,7 @@ function Step({
           maxWidth: 420,
         }}
       >
-        <div className="font-mono text-xs text-white/35">{numeral}</div>
+        <div className="font-mono text-xs text-white/55">{numeral}</div>
         <h2
           style={{
             margin: 0,

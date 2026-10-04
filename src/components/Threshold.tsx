@@ -86,7 +86,7 @@ export default function Threshold({
             needed, and it knows whether this is a phone; saying it twice in two
             different ways only contradicts itself. A door says what is behind
             it, not how to walk. */}
-        <p className="mt-8 text-xs tracking-wide text-white/25">
+        <p className="mt-8 text-xs tracking-wide text-white/50">
           a place, built from that memory · it takes a moment to open
         </p>
       </div>

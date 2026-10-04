@@ -53,7 +53,10 @@ export default function HeroWorld({ splatUrl }: { splatUrl: string }) {
     );
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+    // A backdrop at half opacity behind blurred light does not need retina.
+    // Every extra pixel here is spent on something nobody can resolve, and on
+    // a phone this is the difference between a smooth page and a hot one.
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25));
     renderer.setSize(mount.clientWidth, mount.clientHeight);
     renderer.setClearAlpha(0);
     mount.appendChild(renderer.domElement);
@@ -97,7 +100,31 @@ export default function HeroWorld({ splatUrl }: { splatUrl: string }) {
 
     const start = performance.now();
 
-    renderer.setAnimationLoop(() => {
+    /**
+     * Stop rendering when nobody is looking at it.
+     *
+     * The loop ran for ever: scrolled five sections away, or in a background
+     * tab, a full WebGL context kept drawing a gaussian splat sixty times a
+     * second. On a laptop that is a warm fan for nothing; on a phone it is
+     * the battery.
+     */
+    let onScreen = true;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        onScreen = entry.isIntersecting;
+      },
+      { threshold: 0 },
+    );
+    observer.observe(mount);
+
+    const onVisibility = () => {
+      if (document.hidden) renderer.setAnimationLoop(null);
+      else renderer.setAnimationLoop(frame);
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
+    const frame = () => {
+      if (!onScreen) return;
       // A slow arc around where the capture camera stood, so the room has
       // parallax without ever looking like it is being driven. Two minutes
       // for a full pass.
@@ -105,12 +132,16 @@ export default function HeroWorld({ splatUrl }: { splatUrl: string }) {
       camera.position.set(Math.sin(t) * 0.55, 0.05, Math.cos(t) * 0.55);
       camera.lookAt(0, -0.05, 0);
       renderer.render(scene, camera);
-    });
+    };
+
+    renderer.setAnimationLoop(frame);
 
     return () => {
       disposed = true;
       abort.abort();
       renderer.setAnimationLoop(null);
+      observer.disconnect();
+      document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("resize", onResize);
       splat?.dispose?.();
       renderer.dispose();

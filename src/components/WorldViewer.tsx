@@ -750,6 +750,16 @@ export default function WorldViewer({ world }: { world: World }) {
           if (disposed || !event.lengthComputable || !event.total) return;
           setGroundProgress(Math.round((event.loaded / event.total) * 100));
         },
+        () => {
+          // Without this the note said "adding detail…" for the rest of the
+          // session and the visitor walked through the furniture, because
+          // setGround only ever ran on success. The room is still walkable on
+          // the bounding box, so this is a quieter world, not a broken one.
+          if (disposed) return;
+          console.warn("Lantern: the collider did not load; walking the bounding box instead.");
+          setGroundProgress(null);
+          setGround(true);
+        },
       );
     }
 
@@ -923,7 +933,14 @@ export default function WorldViewer({ world }: { world: World }) {
         mount.removeChild(renderer.domElement);
       }
     };
-  }, [world]);
+    // Keyed on what the scene is actually built from, not on the object.
+    //
+    // `world` is deserialised fresh by every server render, so its identity
+    // changes on each router.refresh() - and refresh is called the moment a
+    // sender finishes their voice notes. The effect tore down the renderer and
+    // re-fetched the entire level-of-detail ladder, up to 23 MB, dropping them
+    // back to "opening… 0%" in a room they were already standing in.
+  }, [world.id, world.splatUrl, world.colliderUrl]);
 
   return (
     <div className="relative h-full w-full">
@@ -947,7 +964,7 @@ export default function WorldViewer({ world }: { world: World }) {
         <div className="absolute inset-0 grid place-items-center px-6">
           <div className="max-w-sm text-center">
             <p className="text-base text-white/80">This gift didn&rsquo;t open.</p>
-            <p className="mt-3 text-sm leading-relaxed text-white/45">
+            <p className="mt-3 text-sm leading-relaxed text-white/55">
               It is usually the connection, not the gift. Try again — nothing is lost.
             </p>
             <button
@@ -957,7 +974,7 @@ export default function WorldViewer({ world }: { world: World }) {
             >
               try again
             </button>
-            <p className="mt-6 font-mono text-[10px] text-white/20">{message}</p>
+            <p className="mt-6 font-mono text-[10px] text-white/55">{message}</p>
           </div>
         </div>
       )}
@@ -979,7 +996,7 @@ export default function WorldViewer({ world }: { world: World }) {
           blocking on. */}
       {status === "ready" && walkable && !ground && (
         <div className="pointer-events-none absolute inset-x-0 bottom-4 grid place-items-center">
-          <p className="text-[11px] tracking-wide text-white/40">
+          <p className="text-[11px] tracking-wide text-white/55">
             {groundProgress === null
               ? "adding detail…"
               : `adding detail… ${groundProgress}%`}
@@ -991,7 +1008,7 @@ export default function WorldViewer({ world }: { world: World }) {
           already there to look at; this just explains why it keeps improving. */}
       {status === "ready" && upgrading !== null ? (
         <div className="pointer-events-none absolute inset-x-0 top-4 grid place-items-center">
-          <p className="text-[11px] tracking-wide text-white/30">
+          <p className="text-[11px] tracking-wide text-white/50">
             {upgrading > 0 ? `sharpening… ${upgrading}%` : "sharpening…"}
           </p>
         </div>

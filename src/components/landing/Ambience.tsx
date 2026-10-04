@@ -177,8 +177,11 @@ export default function Ambience() {
       onClick={toggle}
       aria-pressed={on}
       aria-label={on ? "Turn the room tone off" : "Turn the room tone on"}
-      className="fixed right-5 bottom-5 z-50 flex items-center gap-2 rounded-full px-3 py-2 text-white/30 transition-colors duration-700 hover:text-white/70"
-      style={{ mixBlendMode: "difference" }}
+      // No mix-blend-mode: it makes the browser recomposite this element
+      // against everything beneath it, which on a page of large blurred
+      // layers and a WebGL canvas is the most expensive pixel on screen. A
+      // backdrop and a border do the same job for nothing.
+      className="fixed right-4 bottom-4 z-50 flex min-h-11 items-center gap-2 rounded-full border border-white/10 bg-black/40 px-4 py-2.5 text-white/55 backdrop-blur-sm transition-colors duration-700 hover:text-white/80"
     >
       <span className="text-[10px] tracking-[0.24em] uppercase">sound</span>
       <span aria-hidden className="flex h-3 items-center gap-[2px]">

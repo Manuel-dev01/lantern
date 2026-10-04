@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Newsreader } from "next/font/google";
 import "./globals.css";
 
@@ -35,7 +35,10 @@ export const metadata: Metadata = {
     description: "Build someone the place they remember.",
     type: "website",
   },
-  // A gift is opened on a phone, in a message, usually at night.
+};
+
+/** A gift is opened on a phone, in a message, usually at night. */
+export const viewport: Viewport = {
   themeColor: "#05060a",
 };
 
