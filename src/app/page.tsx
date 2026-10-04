@@ -1,9 +1,11 @@
 import Link from "next/link";
 
 import Atmosphere from "@/components/Atmosphere";
+import Ambience from "@/components/landing/Ambience";
 import HeroWorld from "@/components/landing/HeroWorld";
 import { BuildStatus, TheDoor, VoiceNoteList } from "@/components/landing/Showcase";
 import { MEMORIES } from "@/lib/landing";
+import { readSharedIndex } from "@/lib/gifts";
 
 /**
  * The page a stranger lands on.
@@ -35,7 +37,55 @@ const gutter = "clamp(24px, 7vw, 112px)";
  */
 const HERO_WORLD = "35b95a56-5688-40e0-ada8-0079f1038a71";
 
-export default function Home() {
+export default async function Home() {
+  /**
+   * The real gallery, if there is one.
+   *
+   * These cards used to be three drawn rectangles with a coloured glow in
+   * them - a picture of the product rather than the product. Now they are
+   * whatever people have actually shared, newest first, and the written
+   * memories below are only the fallback for an empty store.
+   *
+   * The landing page is the one place a claim like "places people have built
+   * for each other" has to be true on sight.
+   */
+  const index = await readSharedIndex();
+  const shared = index.slice(0, 3);
+
+  /**
+   * The world shown beside step two, which talks about a roof, a water tank
+   * and aerials - so it has to be the roof, not whichever gift is newest.
+   * Falls back to the world already standing behind the hero.
+   */
+  const roof =
+    index.find((gift) => gift.toName?.trim() === "Tobi")?.thumbnailUrl ??
+    `/worlds/${HERO_WORLD}/thumbnail.webp`;
+  const cards = shared.length
+    ? shared.map((gift, k) => ({
+        key: gift.id,
+        href: `/g/${gift.id}`,
+        to: gift.toName ?? "someone",
+        from: gift.fromName,
+        thumbnailUrl: gift.thumbnailUrl,
+        place: MEMORIES[k % MEMORIES.length].place,
+        short: undefined as string | undefined,
+        hue: MEMORIES[k % MEMORIES.length].hue,
+        chroma: MEMORIES[k % MEMORIES.length].chroma,
+        tall: MEMORIES[k % MEMORIES.length].tall,
+      }))
+    : MEMORIES.map((memory) => ({
+        key: memory.to,
+        href: "/constellation",
+        to: memory.to,
+        from: memory.from,
+        thumbnailUrl: undefined,
+        place: memory.place,
+        short: memory.short as string | undefined,
+        hue: memory.hue,
+        chroma: memory.chroma,
+        tall: memory.tall,
+      }));
+
   return (
     <main style={{ background: "#05060a", color: "rgba(255,255,255,.9)", overflowX: "hidden" }}>
       {/* ---- 01 Hero ---------------------------------------------------- */}
@@ -271,16 +321,26 @@ export default function Home() {
                 "repeating-linear-gradient(135deg,rgba(255,255,255,.035) 0 1px,transparent 1px 12px),#08090d",
             }}
           >
+            {/* A real capture, not a drawn rectangle. The section claims
+                Marble turns a description into a world; showing one is the
+                cheapest way to make that true on sight. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={roof}
+              alt=""
+              loading="lazy"
+              className="absolute inset-0 h-full w-full object-cover opacity-70"
+            />
             <div
               aria-hidden
               style={{
                 position: "absolute",
                 inset: 0,
                 background:
-                  "radial-gradient(ellipse 70% 60% at 60% 70%, oklch(0.58 0.15 45 / .35), transparent 70%)",
+                  "radial-gradient(ellipse 70% 60% at 60% 70%, oklch(0.58 0.15 45 / .3), transparent 70%), linear-gradient(to top, rgba(5,6,10,.85) 0%, transparent 60%)",
               }}
             />
-            <div className="absolute top-4 left-[18px] font-mono text-[11px] text-white/40">
+            <div className="absolute top-4 left-[18px] font-mono text-[11px] text-white/45">
               marble world capture · the roof
             </div>
             <BuildStatus />
@@ -349,10 +409,11 @@ export default function Home() {
             gap: "clamp(20px, 2.5vw, 32px)",
           }}
         >
-          {MEMORIES.map((memory, k) => (
+          {cards.map((card, k) => (
             <Link
-              key={memory.to}
-              href="/constellation"
+              key={card.key}
+              href={card.href}
+              className="group"
               style={{
                 display: "flex",
                 flexDirection: "column",
@@ -372,37 +433,60 @@ export default function Home() {
                     "repeating-linear-gradient(135deg,rgba(255,255,255,.03) 0 1px,transparent 1px 12px),#08090d",
                 }}
               >
+                {card.thumbnailUrl ? (
+                  // Marble's own preview of the world. A plain img: these are
+                  // relative paths behind a rewrite, not build-time assets.
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={card.thumbnailUrl}
+                    alt=""
+                    loading="lazy"
+                    className="absolute inset-0 h-full w-full object-cover opacity-75 transition duration-1000 group-hover:opacity-100"
+                  />
+                ) : (
+                  <div
+                    aria-hidden
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      background: `radial-gradient(ellipse 80% 55% at 55% ${card.tall ? 55 : 78}%, oklch(0.58 ${card.chroma} ${card.hue} / .4), transparent 75%)`,
+                    }}
+                  />
+                )}
                 <div
                   aria-hidden
+                  className="pointer-events-none absolute inset-0"
                   style={{
-                    position: "absolute",
-                    inset: 0,
-                    background: `radial-gradient(ellipse 80% 55% at 55% ${memory.tall ? 55 : 78}%, oklch(0.58 ${memory.chroma} ${memory.hue} / .4), transparent 75%)`,
+                    background: "linear-gradient(to top, rgba(5,6,10,.8) 0%, transparent 55%)",
                   }}
                 />
                 <div className="absolute top-3.5 right-4 left-4 font-mono text-[11px] text-white/40">
-                  world capture · {memory.place}
+                  world capture · {card.place}
                 </div>
               </div>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 <div className="text-[11px] tracking-[0.24em] text-white/60 uppercase">
-                  for {memory.to}
+                  for {card.to}
                 </div>
-                <div
-                  style={{
-                    fontFamily: serif,
-                    fontStyle: "italic",
-                    fontWeight: 300,
-                    fontSize: 18,
-                    lineHeight: 1.5,
-                    color: "rgba(255,255,255,.75)",
-                    textWrap: "pretty",
-                  }}
-                >
-                  &ldquo;{memory.short}&rdquo;
-                </div>
-                <div className="text-[13px] text-white/40">from {memory.from}</div>
+                {card.short ? (
+                  <div
+                    style={{
+                      fontFamily: serif,
+                      fontStyle: "italic",
+                      fontWeight: 300,
+                      fontSize: 18,
+                      lineHeight: 1.5,
+                      color: "rgba(255,255,255,.75)",
+                      textWrap: "pretty",
+                    }}
+                  >
+                    &ldquo;{card.short}&rdquo;
+                  </div>
+                ) : null}
+                {card.from ? (
+                  <div className="text-[13px] text-white/40">from {card.from}</div>
+                ) : null}
               </div>
             </Link>
           ))}
@@ -466,6 +550,10 @@ export default function Home() {
           </Link>
         </div>
       </section>
+
+      {/* A dark room has a sound. Waits for a gesture, because browsers will
+          not start audio before one and ambushing someone is not the mood. */}
+      <Ambience />
 
       <footer
         style={{
