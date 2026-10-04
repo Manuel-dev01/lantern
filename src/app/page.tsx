@@ -44,18 +44,19 @@ const gutter = "clamp(24px, 7vw, 112px)";
  * Pinned rather than "the latest world", because this one is chosen: a small
  * interior that reads well out of focus and behind text. Only its splat is in
  * storage - no collider, no objects - since nobody walks through the hero.
+ *
+ * Shown at 500k, not 100k. The cheaper level was tried and it was a false
+ * economy: a fifth of the gaussians is a fifth of the detail, and behind a
+ * headline the room stopped reading as a room and started reading as a
+ * smear. The whole point of a real capture here is that it is legibly a real
+ * place.
+ *
+ * What makes that affordable is everything else in HeroWorld rather than the
+ * file size - twenty frames a second instead of sixty, nothing at all on a
+ * coarse pointer or a thin CPU, and a check that times its own frames and
+ * takes the backdrop off a machine that cannot keep up.
  */
 const HERO_WORLD = "35b95a56-5688-40e0-ada8-0079f1038a71";
-
-/**
- * The room behind the hero: the smallest level of a real gift.
- *
- * 100k gaussians and 1.2 MB, against 500k and 4.8 MB before. At half opacity
- * behind blurred light nobody can tell the two apart, and it is a fifth of the
- * work on every frame - which was the whole cost of the page. It is also an
- * actual gift someone can go and open, rather than a sample.
- */
-const HERO_GIFT = "1KAJZTJBK1";
 
 export default async function Home() {
   /**
@@ -119,7 +120,7 @@ export default async function Home() {
             builds places you can walk through, over an actual splat of one,
             is the one claim on this page that proves itself. It fades in only
             once decoded, so the page is complete without it. */}
-        <HeroBackdrop splatUrl={`/gifts/${HERO_GIFT}/splat-100k.spz`} />
+        <HeroBackdrop splatUrl={`/worlds/${HERO_WORLD}/splat-500k.spz`} />
         <Atmosphere preset="slit" />
         <div
           aria-hidden
