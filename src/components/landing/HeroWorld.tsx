@@ -148,10 +148,38 @@ export default function HeroWorld({ splatUrl }: { splatUrl: string }) {
     const MIN_FRAME_MS = 50;
     let lastDrawn = 0;
 
+    /**
+     * Give up if this machine cannot afford it.
+     *
+     * Capability cannot be guessed from a user-agent, a core count or a
+     * pointer type - the only honest test is to draw a few frames and see how
+     * long they took. Software rendering manages about one frame a second
+     * here; a real GPU is not close to that.
+     *
+     * So the backdrop watches itself for the first second and takes itself off
+     * the page if it is costing more than it is worth. Nobody gets a janky
+     * page for a decoration, and the design underneath is unchanged.
+     */
+    let measured = 0;
+    let slowFrames = 0;
+    const GIVE_UP_AFTER = 8;
+    const TOO_SLOW_MS = 180;
+
     const frame = () => {
       if (!onScreen) return;
       const now = performance.now();
-      if (now - lastDrawn < MIN_FRAME_MS) return;
+      const since = now - lastDrawn;
+      if (since < MIN_FRAME_MS) return;
+
+      if (lastDrawn && measured < 40) {
+        measured++;
+        if (since > TOO_SLOW_MS) slowFrames++;
+        if (slowFrames >= GIVE_UP_AFTER) {
+          renderer.setAnimationLoop(null);
+          setVisible(false);
+          return;
+        }
+      }
       lastDrawn = now;
       // A slow arc around where the capture camera stood, so the room has
       // parallax without ever looking like it is being driven. Two minutes
