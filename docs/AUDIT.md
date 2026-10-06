@@ -8,9 +8,12 @@ Ordered by what would cost the most if a judge hit it, not by effort.
 
 ## Open
 
-### Worlds — reported by Manuel, not yet characterised
-Bugs seen in some of the seeded worlds. **No detail captured yet**; this is a placeholder so it
-is not lost. Needs: which gift id, what was wrong, and a screenshot if it is visual.
+### Source-world quality
+Marble can return a collider larger than the part of a Gaussian capture that reconstructs cleanly.
+The viewer now has a capture-safe walking radius and per-world FOV/target tuning, and new prompts
+ask for a clear arrival patch and continuous surfaces. This prevents a visitor from walking into
+known edge failures; it cannot reconstruct missing central data. A gift with a hole in its primary
+view still needs regeneration.
 
 ### Object placement
 - Contact shadow strength is a guess (0.5 centre, 0.22 mid). Unverified against a real screen, and
@@ -40,6 +43,11 @@ PEOPLE rule means almost nothing in a real gift is riggable anyway.
 
 These each looked like a different bug and were the same mistake: trusting the bounding box, or
 trusting a document instead of the store.
+
+- **Stretched black sheets at the edge of rooftop and kitchen splats.** Collider bounds were
+  treated as a visual confidence volume. They are not. Walking is now capped around the capture
+  viewpoint, arrival FOV/target are tunable without regenerating, and the two affected live gifts
+  have explicit safe framing.
 
 - **Objects outside the world.** The placement arc asked for more depth than the room had.
 - **Objects under the floor.** Rested on `bounds.min.y`, which is not the floor.

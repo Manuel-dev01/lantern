@@ -4,7 +4,7 @@ import { deleteBlobs, listBlobs, readBlobJson, writeBlobJson } from "./providers
 /**
  * A gift: the thing a visitor makes and sends.
  *
- * Gifts live in Blob as `gifts/<id>.json`, beside the binaries they point at.
+ * Gifts live in R2 as `gifts/<id>.json`, beside the binaries they point at.
  * The committed `data/worlds/*.json` manifests are a different thing - those
  * are curated hero worlds, generated from this machine. Anything a visitor
  * makes lands here, because a deployment cannot write to its own repository.

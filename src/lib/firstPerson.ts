@@ -30,6 +30,142 @@ const TOUCH_LOOK_SPEED = 0.004;
 /** Physics runs in fixed steps so collision cannot be tunnelled through. */
 const STEP_MS = 1000 / 120;
 
+export interface SupportedSpawn {
+  x: number;
+  y: number;
+  z: number;
+  floorY: number;
+  eyeHeight: number;
+  distance: number;
+}
+
+/** The lowest collider surface below a point, shared by walking and stills. */
+export function floorUnderCollider(
+  bvh: MeshBVH,
+  x: number,
+  z: number,
+  from: number,
+): FloorInfo | null {
+  const ray = new THREE.Ray(
+    new THREE.Vector3(x, from, z),
+    new THREE.Vector3(0, -1, 0),
+  );
+  const hits = bvh.raycast(ray, THREE.DoubleSide);
+  if (!hits.length) return null;
+
+  let lowest = Infinity;
+  for (const hit of hits) lowest = Math.min(lowest, hit.point.y);
+  return { y: lowest, surfaces: hits.length };
+}
+
+/** Every collider surface below a point, shared by walking and stills. */
+export function surfacesUnderCollider(
+  bvh: MeshBVH,
+  x: number,
+  z: number,
+  from: number,
+): Surface[] {
+  const ray = new THREE.Ray(
+    new THREE.Vector3(x, from, z),
+    new THREE.Vector3(0, -1, 0),
+  );
+
+  return bvh.raycast(ray, THREE.DoubleSide).map((hit) => ({
+    y: hit.point.y,
+    // Marble's collider winding is inconsistent, so either vertical normal
+    // direction may describe the visible top of the same reconstructed slab.
+    up: Math.abs(hit.face?.normal.y ?? 0) > GROUND_NORMAL_Y,
+  }));
+}
+
+/**
+ * Find a nearby patch that can support the visitor's whole capsule.
+ *
+ * Outdoor Marble colliders can contain the camera origin while still having
+ * no triangle beneath it. WBRE2FTFGN is the concrete example: its saved
+ * `(0, 0, 0)` spawn ray hits nothing, so swapping in the real collider made
+ * gravity take over above a hole. Bounds cannot detect that; only the mesh can.
+ */
+export function findSupportedSpawn(
+  bvh: MeshBVH,
+  origin: THREE.Vector3,
+  bounds: { minY: number; maxY: number },
+): SupportedSpawn | null {
+  const ray = new THREE.Ray();
+  const direction = new THREE.Vector3(0, -1, 0);
+  const verticalSpan = Math.max(bounds.maxY - bounds.minY, 0.1);
+  const rayTop = bounds.maxY + verticalSpan * 0.05;
+  const minEye = Math.max(verticalSpan * 0.08, 0.2);
+  const maxEye = Math.max(verticalSpan * 0.95, minEye * 2);
+  const step = Math.min(0.25, Math.max(0.05, verticalSpan / 32));
+  const maxRadius = Math.min(8, Math.max(1, verticalSpan * 1.5));
+
+  const floorsAt = (x: number, z: number) => {
+    ray.set(new THREE.Vector3(x, rayTop, z), direction);
+    return bvh
+      .raycast(ray, THREE.DoubleSide)
+      .filter(
+        (candidate) =>
+          Math.abs(candidate.face?.normal.y ?? 0) > GROUND_NORMAL_Y,
+      )
+      .map((candidate) => candidate.point.y)
+      .sort((a, b) => b - a)
+      .filter((height, index, heights) => index === 0 || Math.abs(height - heights[index - 1]) > 1e-3);
+  };
+
+  const supportedAt = (x: number, z: number, distance: number): SupportedSpawn | null => {
+    for (const floorY of floorsAt(x, z)) {
+      const savedDrop = origin.y - floorY;
+      const headroomToBounds = bounds.maxY - floorY;
+      const eyeHeight =
+        savedDrop >= minEye && savedDrop <= maxEye
+          ? savedDrop
+          : Math.min(verticalSpan * 0.32, headroomToBounds * 0.84);
+      if (eyeHeight < minEye || eyeHeight > maxEye) continue;
+
+      // The centre ray alone can land on a railing, tank leg or sliver of a
+      // broken reconstruction. Four surrounding rays prove there is enough
+      // continuous floor for the capsule rather than merely one triangle.
+      const footprint = Math.max(step * 0.75, eyeHeight * RADIUS * 0.65);
+      const tolerance = Math.max(0.04, eyeHeight * 0.08);
+      const offsets = [
+        [footprint, 0],
+        [-footprint, 0],
+        [0, footprint],
+        [0, -footprint],
+      ];
+      const supported = offsets.every(([dx, dz]) =>
+        floorsAt(x + dx, z + dz).some(
+          (neighbouringFloor) => Math.abs(neighbouringFloor - floorY) <= tolerance,
+        ),
+      );
+      if (!supported) continue;
+
+      return { x, y: floorY + eyeHeight, z, floorY, eyeHeight, distance };
+    }
+
+    return null;
+  };
+
+  const atOrigin = supportedAt(origin.x, origin.z, 0);
+  if (atOrigin) return atOrigin;
+
+  for (let radius = step; radius <= maxRadius; radius += step) {
+    const samples = Math.max(8, Math.ceil((Math.PI * 2 * radius) / step));
+    for (let sample = 0; sample < samples; sample++) {
+      const angle = (sample / samples) * Math.PI * 2;
+      const supported = supportedAt(
+        origin.x + Math.cos(angle) * radius,
+        origin.z + Math.sin(angle) * radius,
+        radius,
+      );
+      if (supported) return supported;
+    }
+  }
+
+  return null;
+}
+
 export function isTouchDevice(): boolean {
   if (typeof window === "undefined") return false;
   return window.matchMedia?.("(pointer: coarse)").matches ?? "ontouchstart" in window;
@@ -45,6 +181,13 @@ export interface FirstPersonOptions {
   floorY: number;
   /** Highest point of the world. The eye is never allowed above it. */
   ceilingY?: number;
+  /**
+   * Maximum horizontal distance from the capture viewpoint.
+   *
+   * Collider bounds routinely extend into visually broken splat data. This
+   * boundary protects image quality; mesh collision still protects physics.
+   */
+  explorationRadius?: number;
 }
 
 export class FirstPersonController {
@@ -54,6 +197,7 @@ export class FirstPersonController {
   private floorY: number;
   private readonly ceilingY: number | null;
   private readonly spawn: THREE.Vector3;
+  private readonly explorationRadius: number | null;
 
   private bvh: MeshBVH | null = null;
   /** True while standing on the bounding-box stand-in rather than real geometry. */
@@ -111,7 +255,14 @@ export class FirstPersonController {
   constructor(
     camera: THREE.PerspectiveCamera,
     domElement: HTMLElement,
-    { eyeHeight, spawn, lookAt, floorY, ceilingY }: FirstPersonOptions,
+    {
+      eyeHeight,
+      spawn,
+      lookAt,
+      floorY,
+      ceilingY,
+      explorationRadius,
+    }: FirstPersonOptions,
   ) {
     this.camera = camera;
     this.domElement = domElement;
@@ -119,6 +270,10 @@ export class FirstPersonController {
     this.floorY = floorY;
     this.ceilingY = ceilingY ?? null;
     this.spawn = spawn.clone();
+    this.explorationRadius =
+      explorationRadius !== undefined && explorationRadius > 0
+        ? explorationRadius
+        : null;
     this.position.copy(spawn);
 
     // Face the middle of the world rather than an arbitrary axis. A camera
@@ -258,29 +413,48 @@ export class FirstPersonController {
    * rather than assumed, and the visitor is stood on it.
    */
   setCollider(geometry: THREE.BufferGeometry) {
-    this.bvh = new MeshBVH(geometry);
+    const collider = new MeshBVH(geometry);
+    const supported = findSupportedSpawn(collider, this.spawn, {
+      minY: this.floorY,
+      maxY: this.ceilingY ?? this.spawn.y + Math.max(this.spawn.y - this.floorY, 0.1),
+    });
+
+    // Keep the provisional box (or gravity disabled) if the detailed mesh has
+    // nowhere safe to stand. Replacing it anyway is the fall/respawn loop.
+    if (!supported) {
+      console.warn("Lantern: collider has no supported spawn; keeping the safe fallback.");
+      return;
+    }
+
+    this.bvh = collider;
     this.provisional = false;
+    this.floorY = supported.floorY;
+    this.eyeHeight = supported.eyeHeight;
 
-    // Cast from the spawn, which is where Marble's camera stood and so is
-    // indoors by definition. Anything above it risks finding a roof.
-    const ground = this.floorUnder(this.spawn.x, this.spawn.z, this.spawn.y);
-    if (!ground) return;
-
-    const measured = this.spawn.y - ground.y;
-    // Ignore an answer that is not credible - a ray that slipped through a gap
-    // in the mesh should not make the visitor an inch tall or a giant.
-    if (!(measured > 0.05) || measured > (this.spawn.y - this.floorY) * 3) return;
-
-    this.floorY = ground.y;
-    this.eyeHeight = measured;
+    const relocated =
+      supported.distance > 1e-4 || Math.abs(supported.y - this.spawn.y) > 1e-4;
+    if (relocated) {
+      this.spawn.set(supported.x, supported.y, supported.z);
+      this.position.copy(this.spawn);
+    }
 
     // Stand them on it. Without this the capsule keeps the height it was built
     // with until something moves it, which is the fall this exists to prevent.
-    if (this.position.y < ground.y + measured) {
-      this.position.y = ground.y + measured;
+    if (relocated || this.position.y < supported.floorY + supported.eyeHeight) {
+      this.position.y = supported.floorY + supported.eyeHeight;
       this.velocity.y = 0;
       this.onGround = true;
     }
+  }
+
+  /** The mesh-measured scale used by movement and object placement. */
+  get measuredEyeHeight(): number {
+    return this.eyeHeight;
+  }
+
+  /** The corrected start point after the detailed collider has been measured. */
+  get supportedSpawn(): THREE.Vector3 {
+    return this.spawn.clone();
   }
 
   /**
@@ -342,43 +516,20 @@ export class FirstPersonController {
    */
   floorUnder(x: number, z: number, from: number): FloorInfo | null {
     if (!this.bvh || this.provisional) return null;
-
-    const ray = new THREE.Ray(
-      new THREE.Vector3(x, from, z),
-      new THREE.Vector3(0, -1, 0),
-    );
-
-    const hits = this.bvh.raycast(ray, THREE.DoubleSide);
-    if (!hits.length) return null;
-
-    let lowest = Infinity;
-    for (const hit of hits) lowest = Math.min(lowest, hit.point.y);
-
-    return { y: lowest, surfaces: hits.length };
+    return floorUnderCollider(this.bvh, x, z, from);
   }
 
   /**
-   * Every surface a downward ray passes through, with which way each faces.
+   * Every surface a downward ray passes through, with whether it is horizontal.
    *
-   * The normal is what separates a countertop from the underside of the
-   * cupboard above it, and from the wall behind both. Only upward-facing
-   * surfaces can hold anything, so placement needs the direction, not just
-   * the height.
+   * Marble's collider winding is inconsistent: the kitchen table at y=-0.89
+   * has a -Y normal even though it is the visible top. The downward ray,
+   * reach limit, clearance above and footprint test decide whether a shelf is
+   * usable; the absolute normal only separates horizontal support from walls.
    */
   surfacesUnder(x: number, z: number, from: number): Surface[] {
     if (!this.bvh || this.provisional) return [];
-
-    const ray = new THREE.Ray(
-      new THREE.Vector3(x, from, z),
-      new THREE.Vector3(0, -1, 0),
-    );
-
-    return this.bvh.raycast(ray, THREE.DoubleSide).map((hit) => ({
-      y: hit.point.y,
-      // The collider's transforms are baked in by mergeSceneGeometry, so a
-      // face normal here is already in world space.
-      up: (hit.face?.normal.y ?? 0) > 0.6,
-    }));
+    return surfacesUnderCollider(this.bvh, x, z, from);
   }
 
   /** False while there is nothing at all to stand on, so gravity is held off. */
@@ -470,6 +621,23 @@ export class FirstPersonController {
     // runs at 120Hz, so walking up an edge gains a fraction of a millimetre
     // per step and no per-step threshold is ever crossed.
     this.resolveCollisions(scale);
+
+    // A collider is allowed to be much larger than the part of a Gaussian
+    // capture that looks trustworthy. WBRE2FTFGN measured 55 world units
+    // across because distant skyline geometry entered the collider, while the
+    // usable rooftop was only the patch around the source camera. Walking to
+    // the collider edge exposed stretched, low-confidence Gaussians. Keep the
+    // body inside the capture-safe disc; looking around remains unrestricted.
+    if (this.explorationRadius !== null) {
+      const dx = this.position.x - this.spawn.x;
+      const dz = this.position.z - this.spawn.z;
+      const distance = Math.hypot(dx, dz);
+      if (distance > this.explorationRadius) {
+        const scaleToEdge = this.explorationRadius / distance;
+        this.position.x = this.spawn.x + dx * scaleToEdge;
+        this.position.z = this.spawn.z + dz * scaleToEdge;
+      }
+    }
 
     // A world with holes in its mesh can drop the player out of the bottom.
     // Put them back rather than falling forever.

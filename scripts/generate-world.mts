@@ -17,10 +17,12 @@
  * `--world-id` to pick up where it stopped.
  */
 
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import type { World } from "../src/lib/types.ts";
 import { readGlbBounds, spawnFromBounds } from "../src/lib/providers/glb.ts";
+import { supportedSpawnFromGlb } from "../src/lib/providers/collider.ts";
 import {
   existingAsset,
   formatBytes,
@@ -227,6 +229,14 @@ if (best) {
   const placement = bounds
     ? spawnFromBounds(bounds)
     : { spawn: [0, 1.6, 3] as [number, number, number], target: [0, 1, 0] as [number, number, number] };
+  const supported =
+    bounds && colliderPath
+      ? await supportedSpawnFromGlb(await readFile(colliderPath), placement.spawn, {
+          min: bounds.min,
+          max: bounds.max,
+        })
+      : null;
+  if (supported) placement.spawn = [supported.x, supported.y, supported.z];
   console.log(`  spawn:  [${placement.spawn.map((n) => n.toFixed(2)).join(", ")}]`);
 
   // Re-mirroring a world must not throw away what has been placed in it.
@@ -240,7 +250,14 @@ if (best) {
     splatLods,
     colliderUrl: saved.collider,
     spawn: placement.spawn,
+    spawnFloorY: supported?.floorY,
     target: placement.target,
+    cameraFov: previous?.cameraFov ?? 55,
+    explorationRadius:
+      previous?.explorationRadius ??
+      (supported
+        ? Math.max(0.75, (supported.y - supported.floorY) * 1.2)
+        : undefined),
     bounds: bounds ? { min: bounds.min, max: bounds.max } : undefined,
     objects: previous?.objects ?? [],
     fromName: previous?.fromName,

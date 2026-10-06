@@ -8,6 +8,7 @@ import {
 } from "./gifts.ts";
 import { listBlobs, mirrorToBlob } from "./providers/storage.ts";
 import { parseGlbBounds, placeObjects, spawnFromBounds } from "./providers/glb.ts";
+import { supportedSpawnFromGlb } from "./providers/collider.ts";
 import { createTripoClient } from "./providers/tripo.ts";
 import {
   type GenerateWorldResult,
@@ -297,11 +298,15 @@ async function mirrorWorld(gift: Gift): Promise<AdvanceResult> {
   // Bounds are measured when the collider is downloaded, but a stale document
   // can arrive here without them. Fetching the mirrored collider back is
   // cheap next to regenerating a world, so do that rather than stall.
-  if (!gift.bounds && done.collider) {
+  let colliderData: Uint8Array | null = null;
+  if (done.collider) {
     const res = await fetch(done.collider, { cache: "no-store" });
     if (res.ok) {
-      const measured = parseGlbBounds(Buffer.from(await res.arrayBuffer()));
-      if (measured) gift.bounds = { min: measured.min, max: measured.max };
+      colliderData = new Uint8Array(await res.arrayBuffer());
+      if (!gift.bounds) {
+        const measured = parseGlbBounds(colliderData);
+        if (measured) gift.bounds = { min: measured.min, max: measured.max };
+      }
     }
   }
 
@@ -313,6 +318,7 @@ async function mirrorWorld(gift: Gift): Promise<AdvanceResult> {
   const best = LODS.filter((l) => splatLods[l]).pop()!;
 
   let spawn: World["spawn"];
+  let spawnFloorY: World["spawnFloorY"];
   let target: World["target"];
   if (gift.bounds) {
     const placement = spawnFromBounds({
@@ -333,6 +339,18 @@ async function mirrorWorld(gift: Gift): Promise<AdvanceResult> {
     });
     spawn = placement.spawn;
     target = placement.target;
+
+    if (colliderData) {
+      try {
+        const supported = await supportedSpawnFromGlb(colliderData, spawn, gift.bounds);
+        if (supported) {
+          spawn = [supported.x, supported.y, supported.z];
+          spawnFloorY = supported.floorY;
+        }
+      } catch (error) {
+        console.warn("Lantern: could not measure a supported collider spawn", error);
+      }
+    }
   }
 
   gift.world = {
@@ -342,7 +360,18 @@ async function mirrorWorld(gift: Gift): Promise<AdvanceResult> {
     colliderUrl: hrefs.collider,
     bounds: gift.bounds,
     spawn,
+    spawnFloorY,
     target,
+    // World Labs returns a collider for physics, not a confidence volume for
+    // the splat. Measured gifts can have tens of units of distant collider
+    // geometry around a small clean capture. Start new gifts with a calm lens
+    // and a walking radius anchored to the measured eye height; a curator can
+    // widen either value after checking the actual world on a GPU.
+    cameraFov: 55,
+    explorationRadius:
+      spawn && spawnFloorY !== undefined
+        ? Math.max(0.75, (spawn[1] - spawnFloorY) * 1.2)
+        : undefined,
     objects: [],
     caption: assets.caption ?? undefined,
     thumbnailUrl: hrefs.thumbnail,
@@ -544,6 +573,9 @@ async function buildObjects(gift: Gift): Promise<AdvanceResult> {
     const placements = placeObjects(
       gift.bounds,
       ready.map((spec) => boundsOf(spec.meshBounds!)),
+      gift.world.spawn && gift.world.spawnFloorY !== undefined
+        ? { supported: { spawn: gift.world.spawn, floorY: gift.world.spawnFloorY } }
+        : undefined,
     );
 
     gift.world.objects = ready.map((spec, i) => ({

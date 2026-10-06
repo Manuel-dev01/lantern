@@ -32,6 +32,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -50,6 +51,3 @@ scripts/.last-*.log
 
 # local screenshots
 /shots/
-
-.vercel
-.env*

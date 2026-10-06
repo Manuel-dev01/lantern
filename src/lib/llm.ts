@@ -53,7 +53,11 @@ photorealistic 3D scene generator. Rules, in order of importance:
 3. Give it depth - something near, something far, a doorway or window. Flat
    walls make a dull room to stand in.
 4. Concrete and sensory, not sentimental. Name materials, colours, wear.
-5. 60-90 words. Photographic. No camera directions, no story, no metaphor.
+5. Keep the arrival area and a short walking loop clear. Put no large object,
+   wall, railing, foliage, fog, mirror, or reflective surface close to the
+   viewpoint. Major floors, walls and horizons must be continuous and plain.
+6. Describe enough of the surroundings to make every direction coherent.
+7. 60-90 words. Photographic. No camera directions, no story, no metaphor.
 
 objects: 3 to 6 small physical things that belonged in that place and carry
 the memory. Each needs:

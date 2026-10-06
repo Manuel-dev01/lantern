@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import heroWorldManifest from "../../data/worlds/35b95a56-5688-40e0-ada8-0079f1038a71.json";
+
 import Atmosphere from "@/components/Atmosphere";
 import Ambience from "@/components/landing/Ambience";
 import HeroBackdrop from "@/components/landing/HeroBackdrop";
@@ -56,7 +58,10 @@ const gutter = "clamp(24px, 7vw, 112px)";
  * coarse pointer or a thin CPU, and a check that times its own frames and
  * takes the backdrop off a machine that cannot keep up.
  */
-const HERO_WORLD = "35b95a56-5688-40e0-ada8-0079f1038a71";
+const HERO_WORLD = {
+  id: heroWorldManifest.id,
+  splatUrl: heroWorldManifest.splatUrl,
+};
 
 export default async function Home() {
   /**
@@ -80,7 +85,7 @@ export default async function Home() {
    */
   const roof =
     index.find((gift) => gift.toName?.trim() === "Tobi")?.thumbnailUrl ??
-    `/worlds/${HERO_WORLD}/thumbnail.webp`;
+    `/worlds/${HERO_WORLD.id}/thumbnail.webp`;
   const cards = shared.length
     ? shared.map((gift, k) => ({
         key: gift.id,
@@ -120,7 +125,7 @@ export default async function Home() {
             builds places you can walk through, over an actual splat of one,
             is the one claim on this page that proves itself. It fades in only
             once decoded, so the page is complete without it. */}
-        <HeroBackdrop splatUrl={`/worlds/${HERO_WORLD}/splat-500k.spz`} />
+        <HeroBackdrop splatUrl={HERO_WORLD.splatUrl} />
         <Atmosphere preset="slit" />
         <div
           aria-hidden

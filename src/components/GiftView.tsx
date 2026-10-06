@@ -55,11 +55,16 @@ export default function GiftView({ gift }: { gift: Gift }) {
     setMine(isMine(gift.id));
   }, [gift.id]);
 
-  const [entered, setEntered] = useState(
-    () =>
-      typeof window !== "undefined" &&
-      new URLSearchParams(window.location.search).get("enter") === "1",
-  );
+  const [entered, setEntered] = useState(false);
+
+  // The server cannot see the query string here. Reading it in the state
+  // initialiser made `?enter=1` render a door on the server and a world on the
+  // client, which React correctly reported as a hydration mismatch.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("enter") === "1") {
+      setEntered(true);
+    }
+  }, []);
 
   /**
    * Stop polling only when there is nothing left to wait for.

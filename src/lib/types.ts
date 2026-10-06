@@ -43,8 +43,26 @@ export interface World {
   colliderUrl?: string;
   /** Where the camera starts, in world units. Derived from the collider bounds. */
   spawn?: [number, number, number];
+  /** Walkable mesh height under the spawn, measured from the collider. */
+  spawnFloorY?: number;
   /** What the camera initially looks at. */
   target?: [number, number, number];
+  /**
+   * Horizontal field of view for this capture.
+   *
+   * A splat can contain collider geometry beyond the part that reconstructed
+   * cleanly. A slightly tighter lens keeps those low-confidence edge
+   * Gaussians out of the arrival frame without changing the asset itself.
+   */
+  cameraFov?: number;
+  /**
+   * Safe walking distance from the capture viewpoint, in world units.
+   *
+   * The collider answers "can a body stand here?"; it does not answer "does
+   * the splat look good from here?". Generated worlds therefore keep the
+   * visitor near the viewpoint Marble reconstructed most confidently.
+   */
+  explorationRadius?: number;
   /**
    * The collider's bounding box, in world units.
    *
@@ -55,6 +73,18 @@ export interface World {
    */
   bounds?: { min: [number, number, number]; max: [number, number, number] };
   objects?: GiftObject[];
+  /**
+   * Optional centre-to-centre spacing for a curated arrangement.
+   *
+   * Generated colliders can reduce a broad visible tabletop to a thin support
+   * fragment. A gift may deliberately compose small objects into a close
+   * still life there instead of forcing the later ones onto the floor.
+   */
+  placementSpacing?: number;
+  /** Use the objects' stored X/Z coordinates as verified support points. */
+  curatedPlacement?: boolean;
+  /** Outdoor gifts keep small things on open ground instead of any raised slab. */
+  placementMode?: "floor" | "surfaces";
   fromName?: string;
   toName?: string;
   /** Marble's own description of the world. Useful for gallery cards and alt text. */

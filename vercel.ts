@@ -5,16 +5,16 @@ import { routes, type VercelConfig } from "@vercel/config/v1";
  *
  * World manifests reference assets by relative path (`/worlds/<id>/splat.spz`).
  * Locally those are served straight out of `public/`. In production the files
- * are not in the repo at all - they live in Blob - so this rewrite maps the
+ * are not in the repo at all - they live in R2 - so this rewrite maps the
  * same paths onto the store.
  *
  * Keeping them same-origin is deliberate, and fixes two things at once:
  *
  *  1. No CORS. Spark loads splats with HTTP Range requests, and `Range` is not
  *     a CORS-safelisted header, so a cross-origin load triggers a preflight -
- *     which the Blob host answers with 405. The world then fails with nothing
+ *     which the asset host may reject. The world then fails with nothing
  *     more useful than "network error".
- *  2. Local development stays fast. Pointing manifests at absolute Blob URLs
+ *  2. Local development stays fast. Pointing manifests at absolute R2 URLs
  *     means every local page load pulls ~10 MB back over the internet.
  *
  * Worlds are immutable once generated - a gift never changes after it is sent -

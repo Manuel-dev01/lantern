@@ -57,6 +57,23 @@ interface Finding {
   detail: string;
 }
 
+async function gotoWithRetry(page: Page, url: string): Promise<number> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      await page.goto(url, { waitUntil: "domcontentloaded", timeout: 90_000 });
+      return attempt;
+    } catch (error) {
+      lastError = error;
+      // The production sweep crosses several large asset requests on a
+      // variable connection. A transient network switch is not a page bug;
+      // only a URL that fails all three clean navigations is a finding.
+      if (attempt < 3) await page.waitForTimeout(attempt * 750);
+    }
+  }
+  throw lastError;
+}
+
 const findings: Finding[] = [];
 const note = (screen: string, viewport: string, kind: string, detail: string) =>
   findings.push({ screen, viewport, kind, detail });
@@ -153,13 +170,28 @@ async function visit(page: Page, screen: string, path: string, viewport: string,
   page.on("response", onResponse);
 
   try {
-    await page.goto(`${BASE}${path}`, { waitUntil: "domcontentloaded", timeout: 90_000 });
+    const attempts = await gotoWithRetry(page, `${BASE}${path}`);
+    if (attempts > 1) failures.length = 0;
   } catch (err) {
     note(screen, viewport, "navigation failed", err instanceof Error ? err.message.slice(0, 160) : "");
   }
 
   await page.waitForTimeout(settle);
-  await audit(page, screen, viewport);
+  try {
+    await audit(page, screen, viewport);
+  } catch (err) {
+    // A Next/Vercel navigation can replace the document between the final
+    // wait and the first evaluate. That is a race in the probe, not a reason
+    // to lose every later screen. Wait for the replacement document and audit
+    // it once; any repeat failure is recorded normally below.
+    if (err instanceof Error && /Execution context was destroyed/i.test(err.message)) {
+      await page.waitForLoadState("domcontentloaded", { timeout: 30_000 }).catch(() => {});
+      await page.waitForTimeout(500);
+      await audit(page, screen, viewport);
+    } else {
+      throw err;
+    }
+  }
 
   for (const e of [...new Set(consoleErrors)]) note(screen, viewport, "console error", e);
   for (const f of [...new Set(failures)].slice(0, 10)) note(screen, viewport, "request", f);
@@ -226,7 +258,7 @@ for (const viewport of VIEWPORTS) {
   // The intake is a flow, not a screen: walk it without submitting.
   process.stdout.write(`${viewport.name} make-flow… `);
   try {
-    await page.goto(`${BASE}/make`, { waitUntil: "domcontentloaded", timeout: 90_000 });
+    await gotoWithRetry(page, `${BASE}/make`);
     await page.waitForTimeout(2500);
     await page.locator("input, textarea").first().fill("Tobi");
     await page.getByRole("button", { name: /next/i }).click();

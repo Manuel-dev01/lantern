@@ -1,8 +1,8 @@
 # Capture plan — the video and the asset board
 
-Both are **required** submission deliverables, and neither can be made by me: recording needs a
-real screen, a real microphone and a connection that can pull 23 MB. This is the plan so Oct 3 is
-execution rather than design.
+Both are **required** submission deliverables, and final capture needs a real GPU, a real screen,
+a real microphone and a connection that can pull 23 MB. This is the plan so capture is execution
+rather than design.
 
 Base URL: `https://lantern-manuel-dev01s-projects.vercel.app`
 
@@ -20,25 +20,25 @@ The workflow is: **walk to a frame, read it off the HUD, pin it.**
 3. Reopen as `?cam=<pos>&look=<dir>` — same frame, repeatable, reload-proof.
 
 Add `&enter=1` to skip the threshold card, or every capture is a photograph of the door.
-Wait for the HUD to read **`on mesh`** and **`objects n/n`** before capturing. Until the collider
-lands, the player is standing on a flat stand-in and nothing in frame is where it will end up.
+Wait for the HUD to read **`on mesh`** and **`objects n/n`**, and for the **enhancing this room**
+badge to disappear, before capturing. Until the collider lands the player is standing on a flat
+stand-in; until enhancement finishes the room is a deliberately soft streaming preview.
 
 ---
 
-## The video — 90 seconds
+## The two videos
 
-The structure STRATEGY fixed, with what to actually record against each beat. It opens on the
-**recipient**, not the technology. A judge who watches twenty of these has seen twenty tool demos.
+The **90-second film is the product launch piece**: designed type, eased moves, sound and clicks,
+no required narration. It opens on the recipient experience and sells the idea quickly.
 
-| time | beat | what to record |
-|---|---|---|
-| 0–20s | the hook | A real person opening a real link on a phone. Their face, then their screen. No narration over it. |
-| 20–60s | the create flow | `/make`, typing a genuine memory, the wait screen counting the things, the gift opening. Cut the wait down, but show that it is a wait. |
-| 60–90s | the technical reveal | Marble's room, Tripo objects inside it, an object passing behind and in front of real geometry. Then the voice note firing as you walk up to something. |
-| last 15s | the constellation | `/constellation`, then one card opening into a world. |
+The **five-minute film is the scored product walkthrough**: landing page, receiving, real
+navigation, creation flow, progressive detail, object/world integration, collider evidence and
+sharing. It leaves enough time for calm narration and never turns editorial cursor movement into
+evidence of a click or completed action.
 
-**The hook is the whole film.** If the first twenty seconds are a screen recording of a form, the
-rest does not matter.
+Both are rendered from stable, verified captures rather than hand-steered recording, which keeps
+the motion smooth and reproducible. Source, timings, disclosure, commands and final-file checks
+live in [DEMO.md](DEMO.md); the narration master is [DEMO-NARRATION.md](DEMO-NARRATION.md).
 
 ---
 
@@ -64,15 +64,29 @@ Shots worth having:
 
 | id | memory | note |
 |---|---|---|
-| `S65X3KQAZT` | a kitchen in Lagos | objects on the worktop; the one most walked and most debugged |
-| `WMSSFM4WRF` | a sewing room in Enugu | full quality, five objects |
-| `XE7ZRG0GJ1` | a rooftop at six o'clock | outdoor, good for the wide arrival shot |
-| `ZPRNWX3S5W` | a corner shop | dark interior, strong contrast for object close-ups |
+| `1KAJZTJBK1` | her kitchen in Lagos | curated tabletop still life; strongest placement close-up |
+| `Z1MV55219C` | the front room in Enugu where she sewed | sewing-machine composition; strongest object close-up |
+| `WBRE2FTFGN` | the roof of the block of flats | repaired mesh-derived spawn; strongest wide arrival shot |
 
-These four are seeded and shared. Their memories are written, not real — they exist so a judge
-finds a populated gallery. **At least one gift in the video should be a real one**, sent to
+These three are live and shared. **At least one gift in the video should be a real one**, sent to
 someone who did not know it was coming. That is Phase 5's actual milestone and the only part of
 the film that cannot be faked.
+
+### Reproduce the board
+
+The final stills use system Chrome's real GPU. `shot.mjs` is deliberately a software-rendered
+diagnostic and must not be used for these images: Spark measured at roughly zero fps there and
+returned blank or partial splat frames.
+
+```powershell
+npm run capture:board -- all
+npm run capture:compose
+```
+
+The capture runner refuses a SwiftShader/software renderer and waits for the requested splat,
+the collider, and every object request before saving. The individual PNGs and the composed board
+land in `shots/asset-board/`; that directory is intentionally ignored because these are generated
+submission artifacts, not application assets.
 
 ---
 
@@ -80,5 +94,6 @@ the film that cannot be faked.
 
 - Make the gift you will film **in advance**; a full world takes about twenty minutes end to end.
 - Record the voice notes before filming the walk-through, or the objects will be silent.
-- Check `objects n/n` reaches the full count, and that the splat has reached full_res, before you
-  start. The sharpening is visible on camera and will look like a glitch.
+- Check `objects n/n` reaches the full count, the HUD names `splat-full_res.spz`, and the
+  enhancement badge has disappeared before you start. The streaming preview is useful to a
+  visitor and wrong for a final-quality still.

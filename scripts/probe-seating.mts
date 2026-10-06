@@ -23,7 +23,7 @@ import { MeshBVH } from "three-mesh-bvh";
 
 import { readGift } from "../src/lib/gifts.ts";
 import { mergeSceneGeometry } from "../src/lib/firstPerson.ts";
-import { findPerch, orientFor, seatOnFloor } from "../src/lib/seating.ts";
+import { findPerch, orientFor, restingHeight, seatOnFloor } from "../src/lib/seating.ts";
 
 const [id, colliderPath, objDir] = process.argv.slice(2);
 if (!id || !colliderPath || !objDir) {
@@ -129,7 +129,7 @@ const query = (x: number, z: number) => {
 };
 
 const surfaces = (x: number, z: number) =>
-  raw(x, z, overhead).map((h) => ({ y: h.point.y, up: (h.face?.normal.y ?? 0) > 0.6 }));
+  raw(x, z, overhead).map((h) => ({ y: h.point.y, up: Math.abs(h.face?.normal.y ?? 0) > 0.35 }));
 
 // Does the collider actually distinguish a countertop from a wall? If the
 // winding is inconsistent this returns nothing upward-facing and every object
@@ -142,6 +142,18 @@ const surfaces = (x: number, z: number) =>
   );
   const anyUp = surfaces(0, 0).some((p) => p.up);
   console.log(`floor under spawn reads upward-facing: ${anyUp}`);
+  for (const object of gift.world.objects ?? []) {
+    const [x, , z] = object.position;
+    console.log(
+      `${(object.caption ?? "?").padEnd(26)} original surfaces: ` +
+        (raw(x, z, overhead)
+          .map(
+            (hit) =>
+              `${hit.point.y.toFixed(2)} normalY=${(hit.face?.normal.y ?? 0).toFixed(2)}`,
+          )
+          .join(", ") || "none"),
+    );
+  }
   console.log();
 }
 
@@ -177,9 +189,24 @@ for (const o of gift.world.objects ?? []) {
 
   // Laying a sliver down swaps its height for the axis that went up.
   const seatedHeight = orient.lay ? (orient.lay === "x" ? dim.x : dim.z) : dim.y;
-  const eyeHeight = Math.max(spawnY - (gift.bounds?.min[1] ?? 0), 1e-3);
+  const eyeHeight = Math.max(
+    spawnY - (gift.world.spawnFloorY ?? gift.bounds?.min[1] ?? 0),
+    1e-3,
+  );
 
-  const perch = findPerch(
+  const object = { height: seatedHeight, radius: Math.max(dim.x, dim.z) * 0.5 };
+  const spacing = gift.world.placementSpacing ?? 0.25;
+  let perch = null as ReturnType<typeof findPerch>;
+
+  if (gift.world.curatedPlacement) {
+    const [x, , z] = o.position;
+    const rest = restingHeight(surfaces, x, z, spawnY, object);
+    if (rest && !picked.some((spot) => Math.hypot(spot.x - x, spot.z - z) < spacing)) {
+      perch = { x, z, y: rest.y, raised: rest.y - rest.floor > 0.15 };
+    }
+  }
+
+  perch ??= findPerch(
     surfaces,
     { ...spawnXZ, y: spawnY },
     (() => {
@@ -188,9 +215,13 @@ for (const o of gift.world.objects ?? []) {
       const l = Math.hypot(dx, dz) || 1;
       return { x: dx / l, z: dz / l };
     })(),
-    { height: seatedHeight, radius: Math.max(dim.x, dim.z) * 0.5 },
+    object,
     picked,
-    { preferFloor: seatedHeight > eyeHeight * 0.18 },
+    {
+      preferFloor:
+        gift.world.placementMode === "floor" || seatedHeight > eyeHeight * 0.3,
+      spacing,
+    },
   );
   if (perch) picked.push({ x: perch.x, z: perch.z });
 
@@ -212,7 +243,8 @@ for (const o of gift.world.objects ?? []) {
   console.log(
     `${(o.caption ?? name).padEnd(26)}\n` +
       `   turn              lay=${orient.lay ?? "none"} yaw=${((orient.yaw * 180) / Math.PI).toFixed(0)}deg   height ${seatedHeight.toFixed(3)} of eye ${eyeHeight.toFixed(2)}\n` +
-      `   rests at          ${seat.y.toFixed(3)}  ${perch ? (perch.raised ? "ON FURNITURE" : "on the floor") : "floor fallback"}${perch ? ` at ${perch.x.toFixed(2)},${perch.z.toFixed(2)}` : ""}\n` +
+      `   scaled bounds      ${dim.x.toFixed(3)} x ${dim.y.toFixed(3)} x ${dim.z.toFixed(3)}\n` +
+      `   rests at          ${seat.y.toFixed(3)}  ${perch ? (perch.raised ? "ON FURNITURE" : "on the floor") : "floor fallback"}${perch ? ` at ${perch.x.toFixed(8)},${perch.z.toFixed(8)}` : ""}\n` +
       `   true min.y*scale   ${(local.min.y * (o.scale ?? 1)).toFixed(3)}   accessor min.y*scale ${accessorMinY.toFixed(3)}${transformed ? "  <- node transforms present" : ""}\n` +
       `   Box3 min.y before  ${before.min.y.toFixed(3)}\n` +
       `   final underside    ${after.min.y.toFixed(3)}   gap to floor ${(after.min.y - seat.y).toFixed(4)}\n` +

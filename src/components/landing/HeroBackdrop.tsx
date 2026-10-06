@@ -2,6 +2,8 @@
 
 import dynamic from "next/dynamic";
 
+import type { HeroWorldProps } from "@/components/landing/HeroWorld";
+
 /**
  * Keeps the 3D engine out of the landing page's first load.
  *
@@ -19,6 +21,6 @@ const HeroWorld = dynamic(() => import("@/components/landing/HeroWorld"), {
   loading: () => null,
 });
 
-export default function HeroBackdrop({ splatUrl }: { splatUrl: string }) {
-  return <HeroWorld splatUrl={splatUrl} />;
+export default function HeroBackdrop(props: HeroWorldProps) {
+  return <HeroWorld {...props} />;
 }

@@ -6,15 +6,20 @@ import { SparkRenderer, SplatMesh, SplatFileType } from "@sparkjsdev/spark";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { MeshBVH } from "three-mesh-bvh";
 import type { World } from "@/lib/types";
 import {
   FirstPersonController,
+  findSupportedSpawn,
+  floorUnderCollider,
   isTouchDevice,
   mergeSceneGeometry,
+  surfacesUnderCollider,
 } from "@/lib/firstPerson";
-import { findPerch, orientFor, seatOnFloor } from "@/lib/seating";
+import { findPerch, orientFor, restingHeight, seatOnFloor } from "@/lib/seating";
 
 type Status = "loading" | "ready" | "error";
+type Enhancement = { step: number; total: number; percent: number | null };
 
 /**
  * Which levels of detail to load, in order.
@@ -157,8 +162,8 @@ export default function WorldViewer({ world }: { world: World }) {
   );
   const [groundProgress, setGroundProgress] = useState<number | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
-  /** Percentage of the sharper level, once the room is already visible. */
-  const [upgrading, setUpgrading] = useState<number | null>(null);
+  /** The sharper quality rung loading behind a room that is already usable. */
+  const [enhancement, setEnhancement] = useState<Enhancement | null>(null);
   const [message, setMessage] = useState<string>("");
 
   useEffect(() => {
@@ -236,7 +241,7 @@ export default function WorldViewer({ world }: { world: World }) {
     scene.background = new THREE.Color(0x05060a);
 
     const camera = new THREE.PerspectiveCamera(
-      60,
+      world.cameraFov ?? 60,
       mount.clientWidth / mount.clientHeight,
       0.01,
       1000,
@@ -288,7 +293,7 @@ export default function WorldViewer({ world }: { world: World }) {
     // since Marble worlds are not metric and each one differs.
     const boundsMin = world.bounds?.min ?? [-1, 0, -1];
     const boundsMax = world.bounds?.max ?? [1, 2, 1];
-    const floorY = boundsMin[1];
+    const floorY = world.spawnFloorY ?? boundsMin[1];
     // Eye height is the drop from where the camera stands to the lowest
     // geometry, not a fraction of the whole box. A collider takes in whatever
     // is visible through a window, so the box can be several times the height
@@ -302,6 +307,14 @@ export default function WorldViewer({ world }: { world: World }) {
 
     let controls: OrbitControls | null = null;
     let player: FirstPersonController | null = null;
+    // Pinned and orbit cameras do not own a movement controller, but their
+    // objects still need the exact same collider-backed seating as a walk.
+    // Keeping that BVH here fixes reproducible stills without letting a hidden
+    // controller rewrite the camera the still explicitly requested.
+    let placementBvh: MeshBVH | null = null;
+    const placementSpawn = new THREE.Vector3().fromArray(
+      world.spawn ?? [0, 1.6, 3],
+    );
 
     // A pinned camera means neither: the walker rewrites the camera every
     // frame from the capsule, and orbit damping drifts it. A frame asked for
@@ -327,12 +340,18 @@ export default function WorldViewer({ world }: { world: World }) {
             (boundsMin[2] + boundsMax[2]) / 2,
           ],
         ),
+        explorationRadius: world.explorationRadius,
       });
       player.autoWalk = autoWalk;
       player.setJoystickElements(stickRef.current, thumbRef.current);
       // Stand on the bounding box straight away. The real collider is several
       // megabytes and would otherwise leave the player frozen until it lands.
-      if (world.bounds) player.setProvisionalBounds(world.bounds.min, world.bounds.max);
+      if (world.bounds) {
+        player.setProvisionalBounds(
+          [world.bounds.min[0], floorY, world.bounds.min[2]],
+          world.bounds.max,
+        );
+      }
     }
 
     /**
@@ -479,10 +498,15 @@ export default function WorldViewer({ world }: { world: World }) {
     }
 
     function seatObject(node: THREE.Object3D) {
-      if (!player) return;
+      if (!player && !placementBvh) return;
 
-      const from = world.spawn?.[1] ?? 0;
-      const spawn = { x: world.spawn?.[0] ?? 0, z: world.spawn?.[2] ?? 0, y: from };
+      // Outdoor colliders can prove that the manifest spawn was under or
+      // beside the walkable surface. Placement must follow the corrected
+      // start point too, or the visitor is rescued while every object still
+      // raycasts from the old hole and disappears.
+      const supportedSpawn = player?.supportedSpawn ?? placementSpawn;
+      const from = supportedSpawn.y;
+      const spawn = { x: supportedSpawn.x, z: supportedSpawn.z, y: from };
 
       // Before anything is measured: seating and the contact shadow are both
       // computed from the box, and the box changes when the object turns.
@@ -510,16 +534,41 @@ export default function WorldViewer({ world }: { world: World }) {
       // which is what made every surface look like it had no room above it.
       const overhead = (world.bounds?.max[1] ?? from) + 1;
 
-      const perch = findPerch(
-        (x, z) => player.surfacesUnder(x, z, overhead),
+      const supportQuery = (x: number, z: number) =>
+        player
+          ? player.surfacesUnder(x, z, overhead)
+          : surfacesUnderCollider(placementBvh!, x, z, overhead);
+      const object = { height: size.y, radius: Math.max(size.x, size.z) * 0.5 };
+      const spacing = world.placementSpacing ?? 0.25;
+      let perch = null as ReturnType<typeof findPerch>;
+
+      if (world.curatedPlacement && original) {
+        const x = original[0];
+        const z = original[2];
+        const rest = restingHeight(supportQuery, x, z, from, object);
+        if (rest && !taken.some((spot) => Math.hypot(spot.x - x, spot.z - z) < spacing)) {
+          perch = { x, z, y: rest.y, raised: rest.y - rest.floor > 0.15 };
+        }
+      }
+
+      perch ??= findPerch(
+        supportQuery,
         spawn,
         { x: dx, z: dz },
-        { height: size.y, radius: Math.max(size.x, size.z) * 0.5 },
+        object,
         taken,
-        // A kerosene stove belongs on the floor; a bowl does not. Decided by
-        // size against the visitor's own height, never by what the thing is
-        // called, so it means the same in a bedroom as in a kitchen.
-        { preferFloor: size.y > eyeHeight * 0.18 },
+        // Only genuinely person-scale objects prefer the floor. The previous
+        // 18% cutoff classified this gift's 36 cm spoon and plantains as floor
+        // objects, even though the table is exactly where they belong.
+        {
+          // A roof tank is technically a broad raised surface and completely
+          // wrong for a football, blanket and binoculars. Outdoor gifts can
+          // say that their remembered things belong on the walkable ground;
+          // size remains the conservative default for generated interiors.
+          preferFloor:
+            world.placementMode === "floor" || size.y > eyeHeight * 0.3,
+          spacing,
+        },
       );
 
       let restY: number;
@@ -531,7 +580,10 @@ export default function WorldViewer({ world }: { world: World }) {
       } else {
         // No surface would take it - rest it on the floor where it stands.
         const seat = seatOnFloor(
-          (x, z) => player.floorUnder(x, z, from),
+          (x, z) =>
+            player
+              ? player.floorUnder(x, z, from)
+              : floorUnderCollider(placementBvh!, x, z, from),
           { x: original?.[0] ?? node.position.x, z: original?.[2] ?? node.position.z },
           spawn,
         );
@@ -609,20 +661,37 @@ export default function WorldViewer({ world }: { world: World }) {
 
     void (async () => {
       try {
+        // Collision verification does not need a gaussian draw. Software
+        // Chrome can spend tens of seconds inside one splat frame, hiding the
+        // physics numbers this mode exists to measure.
+        if (debug === "nosplat") {
+          setStatus("ready");
+          loadCollider();
+          await loadGiftObjects();
+          return;
+        }
+
         for (const [index, url] of ladder.entries()) {
           const upgrade = index > 0;
-          // Announce the upgrade before a byte arrives. Blob serves these
-          // brotli-encoded and chunked, so there is no Content-Length and the
-          // progress callback never fires - which left the room silently
-          // sharpening with nothing on screen to say so.
-          if (upgrade) setUpgrading(0);
+          // Announce the active rung before a byte arrives. Blob serves these
+          // brotli-encoded and chunked, so there is often no Content-Length;
+          // the rung still gives honest progress when a percentage cannot.
+          if (upgrade) {
+            setEnhancement({ step: index + 1, total: ladder.length, percent: null });
+          }
           const bytes = await fetchWorldAsset(url, abort.signal, (fraction) => {
             if (disposed) return;
             // The first load owns the progress line; an upgrade happens behind
             // a world the visitor is already standing in and must not reopen
             // the overlay.
             if (!upgrade) setProgress(Math.round(fraction * 100));
-            else setUpgrading(Math.round(fraction * 100));
+            else {
+              setEnhancement({
+                step: index + 1,
+                total: ladder.length,
+                percent: Math.round(fraction * 100),
+              });
+            }
           });
           if (disposed) return;
 
@@ -639,7 +708,15 @@ export default function WorldViewer({ world }: { world: World }) {
 
           loadedUrl = url;
           setStatus("ready");
-          if (upgrade) setUpgrading(null);
+          if (upgrade && index === ladder.length - 1) setEnhancement(null);
+
+          // The room is visibly soft from this first usable frame onward.
+          // Object downloads run before the next splat rung so the keepsakes
+          // are not starved; the quality notice must cover that interval too,
+          // rather than appearing minutes after the visitor noticed the blur.
+          if (!upgrade && ladder.length > 1) {
+            setEnhancement({ step: 1, total: ladder.length, percent: null });
+          }
 
           // Only once the room is actually on screen. Starting these at mount
           // put six multi-megabyte downloads in flight at once - the splat,
@@ -664,7 +741,7 @@ export default function WorldViewer({ world }: { world: World }) {
         // A failed upgrade is not a failed world: the first level is already
         // on screen and worth keeping.
         if (splat) {
-          setUpgrading(null);
+          setEnhancement(null);
           return;
         }
         setStatus("error");
@@ -717,18 +794,28 @@ export default function WorldViewer({ world }: { world: World }) {
         // The same mesh, used a third way: collision. One asset for visuals'
         // depth, physics, and walking.
         const collision = mergeSceneGeometry(gltf.scene);
-        if (collision) player?.setCollider(collision);
+        let measuredEye = null as number | null;
+        if (collision && player) {
+          player.setCollider(collision);
+          placementSpawn.copy(player.supportedSpawn);
+          measuredEye = player.measuredEyeHeight;
+        } else if (collision) {
+          placementBvh = new MeshBVH(collision);
+          const supported = findSupportedSpawn(placementBvh, placementSpawn, {
+            minY: boundsMin[1],
+            maxY: boundsMax[1],
+          });
+          if (supported) {
+            placementSpawn.set(supported.x, supported.y, supported.z);
+            measuredEye = supported.eyeHeight;
+          }
+        }
         setGround(true);
 
         // Now the real floor is knowable, so correct how big a person is -
         // and therefore how big everything made relative to one should be.
-        const under = player?.floorUnder(
-          world.spawn?.[0] ?? 0,
-          world.spawn?.[2] ?? 0,
-          world.spawn?.[1] ?? 0,
-        );
-        if (under) {
-          const realEye = (world.spawn?.[1] ?? 0) - under.y;
+        const realEye = measuredEye;
+        if (realEye) {
           const ratio = realEye / eyeHeight;
           // Only act on a believable correction. A ray through a gap in the
           // mesh should not shrink the room's contents to nothing.
@@ -1004,13 +1091,43 @@ export default function WorldViewer({ world }: { world: World }) {
         </div>
       )}
 
-      {/* Quiet, and only while the sharper level is still coming. The room is
-          already there to look at; this just explains why it keeps improving. */}
-      {status === "ready" && upgrading !== null ? (
-        <div className="pointer-events-none absolute inset-x-0 top-4 grid place-items-center">
-          <p className="text-[11px] tracking-wide text-white/50">
-            {upgrading > 0 ? `sharpening… ${upgrading}%` : "sharpening…"}
-          </p>
+      {/* The first rung can look glassy for minutes on a slow connection. This
+          needs to read against bright windows as well as dark rooms, and it
+          must start before object downloads—not only once the next rung does. */}
+      {status === "ready" && enhancement ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className="pointer-events-none absolute right-4 top-4 w-[min(280px,calc(100%-2rem))] rounded-2xl border border-white/15 bg-black/65 px-4 py-3 text-white shadow-2xl backdrop-blur-md"
+        >
+          <div className="flex items-center gap-2.5">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#ead5b7]" />
+            <p className="text-xs tracking-[0.08em] text-white/90">enhancing this room</p>
+          </div>
+          <div className="mt-2 flex items-center justify-between gap-4 text-[10px] tracking-wide text-white/55">
+            <span>
+              detail {enhancement.step} of {enhancement.total}
+            </span>
+            <span>
+              {enhancement.percent !== null && enhancement.percent > 0
+                ? `${enhancement.percent}%`
+                : "keep exploring"}
+            </span>
+          </div>
+          <div className="mt-2 h-px overflow-hidden bg-white/15">
+            <div
+              aria-hidden
+              className={`h-full bg-[#ead5b7] transition-[width] duration-300 ${
+                enhancement.percent === null ? "animate-pulse" : ""
+              }`}
+              style={{
+                width:
+                  enhancement.percent !== null
+                    ? `${Math.max(enhancement.percent, 3)}%`
+                    : "34%",
+              }}
+            />
+          </div>
         </div>
       ) : null}
 

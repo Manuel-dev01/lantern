@@ -4,6 +4,10 @@ import { SplatFileType, SparkRenderer, SplatMesh } from "@sparkjsdev/spark";
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 
+export interface HeroWorldProps {
+  splatUrl: string;
+}
+
 /**
  * A real world behind the first screen.
  *
@@ -25,7 +29,7 @@ import * as THREE from "three";
  * and fades in only once decoded, so a failure, a blocked store or a slow
  * connection costs nothing. The page is complete without it.
  */
-export default function HeroWorld({ splatUrl }: { splatUrl: string }) {
+export default function HeroWorld({ splatUrl }: HeroWorldProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
 
@@ -68,6 +72,25 @@ export default function HeroWorld({ splatUrl }: { splatUrl: string }) {
     );
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    const gl = renderer.getContext();
+    const debugRenderer = gl.getExtension("WEBGL_debug_renderer_info");
+    const gpu = debugRenderer
+      ? String(gl.getParameter(debugRenderer.UNMASKED_RENDERER_WEBGL))
+      : "";
+
+    /**
+     * Do not enter a draw call that cannot return in time to police itself.
+     *
+     * SwiftShader measured at ~0 fps here and could not finish a screenshot in
+     * 25 seconds. The eight-frame runtime check still protects weak real GPUs,
+     * but a named software rasterizer can be rejected before its first frame
+     * blocks the main thread and before a canvas is attached to the page.
+     */
+    if (/swiftshader|llvmpipe|software rasterizer|microsoft basic render/i.test(gpu)) {
+      renderer.dispose();
+      return;
+    }
+
     // A backdrop at half opacity behind blurred light does not need retina.
     // Every extra pixel here is spent on something nobody can resolve, and on
     // a phone this is the difference between a smooth page and a hot one.
@@ -80,6 +103,7 @@ export default function HeroWorld({ splatUrl }: { splatUrl: string }) {
     scene.add(spark);
 
     let splat: SplatMesh | null = null;
+    let splatReady = false;
 
     void (async () => {
       try {
@@ -98,6 +122,11 @@ export default function HeroWorld({ splatUrl }: { splatUrl: string }) {
 
         await splat.initialized;
         if (disposed) return;
+        // Start the capability test with the first frame that contains the
+        // room. The 4.8 MB decode can take longer than the old 40-frame
+        // sample, which otherwise measured an empty scene and let a slow GPU
+        // keep the expensive backdrop for the rest of the visit.
+        splatReady = true;
         setVisible(true);
       } catch {
         // A hero that does not arrive is not a broken page. It is a page
@@ -171,7 +200,7 @@ export default function HeroWorld({ splatUrl }: { splatUrl: string }) {
       const since = now - lastDrawn;
       if (since < MIN_FRAME_MS) return;
 
-      if (lastDrawn && measured < 40) {
+      if (splatReady && lastDrawn && measured < 40) {
         measured++;
         if (since > TOO_SLOW_MS) slowFrames++;
         if (slowFrames >= GIVE_UP_AFTER) {
@@ -181,9 +210,9 @@ export default function HeroWorld({ splatUrl }: { splatUrl: string }) {
         }
       }
       lastDrawn = now;
-      // A slow arc around where the capture camera stood, so the room has
-      // parallax without ever looking like it is being driven. Two minutes
-      // for a full pass.
+      // Keep the production composition exactly: this close orbit is the view
+      // the design was composed around, and the wider manifest-radius version
+      // exposed walls and reconstruction edges the light was meant to hide.
       const t = reduced ? 0 : ((performance.now() - start) / 120_000) * Math.PI * 2;
       camera.position.set(Math.sin(t) * 0.55, 0.05, Math.cos(t) * 0.55);
       camera.lookAt(0, -0.05, 0);

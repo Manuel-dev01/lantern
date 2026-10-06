@@ -24,7 +24,14 @@
     "gift:reindex": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/reindex-shared.mts",
     "worker": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/worker.mts",
     "world:hero": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/push-hero.mts",
-    "sweep": "node scripts/sweep.mts"
+    "gift:spawn": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/probe-spawn.mts",
+    "gift:walk": "node scripts/probe-walk.mts",
+    "gift:tune": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/tune-gift.mts",
+    "sweep": "node scripts/sweep.mts",
+    "hero:probe": "node scripts/probe-hero.mts",
+    "capture:board": "node scripts/capture-board.mts",
+    "capture:compose": "node scripts/compose-board.mts",
+    "video:launch": "node scripts/render-launch-video.mts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1145.0",

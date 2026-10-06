@@ -191,20 +191,36 @@ export function placeInWorld(
 export function placeObjects(
   world: { min: Vec3; max: Vec3 },
   objects: GlbBounds[],
-  { heightFraction = 0.22 }: { heightFraction?: number } = {},
+  {
+    heightFraction = 0.22,
+    supported,
+  }: {
+    heightFraction?: number;
+    supported?: { spawn: Vec3; floorY: number };
+  } = {},
 ): Array<{ position: Vec3; scale: number }> {
-  const floorY = world.min[1];
+  const floorY = supported?.floorY ?? world.min[1];
   const originInside = [0, 1, 2].every((i) => world.min[i] <= 0 && world.max[i] >= 0);
 
   // The drop from where the camera stood to the lowest geometry. In a world
   // that is mostly outdoors this is still the height of a person, where the
   // full box height would be the height of the sky.
-  const eyeHeight = originInside
+  const eyeHeight = supported
+    ? Math.max(supported.spawn[1] - supported.floorY, 1e-3)
+    : originInside
     ? Math.max(-floorY, 1e-3)
     : Math.max((world.max[1] - floorY) * 0.65, 1e-3);
 
-  const centreX = originInside ? 0 : (world.min[0] + world.max[0]) / 2;
-  const centreZ = originInside ? 0 : (world.min[2] + world.max[2]) / 2;
+  const centreX = supported
+    ? supported.spawn[0]
+    : originInside
+      ? 0
+      : (world.min[0] + world.max[0]) / 2;
+  const centreZ = supported
+    ? supported.spawn[2]
+    : originInside
+      ? 0
+      : (world.min[2] + world.max[2]) / 2;
 
   const count = objects.length;
 

@@ -90,7 +90,7 @@ export function seatOnFloor(
 /** One surface a downward ray passed through. */
 export interface Surface {
   y: number;
-  /** True when the face points upward - something can be set down on it. */
+  /** True when the face is horizontal enough to support something. */
   up: boolean;
 }
 
@@ -218,7 +218,7 @@ export function findPerch(
  * supported at roughly the same height - otherwise a bowl ends up hanging over
  * the edge of a counter with nothing under half of it.
  */
-function restingHeight(
+export function restingHeight(
   query: SurfaceQuery,
   x: number,
   z: number,

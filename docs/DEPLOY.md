@@ -1,111 +1,124 @@
 # Deploying Lantern
 
-## The one thing to understand first
+The Next.js application runs on Vercel. Generated documents and binaries live
+in Cloudflare R2. A Railway worker keeps unfinished gifts advancing when no
+browser is open.
 
-**World binaries are not in git, and they never will be.** A single draft world is
-~9.4 MB (986 KB splat, 8.4 MB collider, 25 KB thumbnail) and every new world adds
-another. Committing them would bloat the repo permanently, so `public/worlds/` is
-gitignored.
+## Contents
 
-That splits a world in two:
+- [Live application](#live-application)
+- [Deployment shape](#deployment-shape)
+- [Environment](#environment)
+- [Release procedure](#release-procedure)
+- [World assets](#world-assets)
+- [Same-origin invariant](#same-origin-invariant)
+- [Post-deploy checks](#post-deploy-checks)
 
-| Part | Lives in | Committed |
+## Live application
+
+<https://lantern-manuel-dev01s-projects.vercel.app>
+
+Vercel SSO protection must remain disabled so a judge can open the demo without
+an account.
+
+## Deployment shape
+
+| Concern | Service | Notes |
 |---|---|---|
-| Manifest — `data/worlds/<id>.json` | git | **yes** |
-| Splat, collider, thumbnail, object meshes | `public/worlds/<id>/` locally, Vercel Blob in production | no |
+| Next.js pages and APIs | Vercel | routes, pipeline ticks, same-origin rewrites |
+| gift JSON and binaries | Cloudflare R2 | strongly consistent server reads; public immutable assets |
+| continuation worker | Railway | lists unfinished gifts and calls the deployed tick API |
 
-So a fresh `git clone` builds and runs, but shows no world until the binaries are
-either regenerated locally or already uploaded to Blob. **A deploy without
-`world:push` will render an empty scene** — the manifests point at `/worlds/...`
-paths that do not exist on the server.
+World binaries are intentionally not in git. A full splat is tens of megabytes,
+and every generated gift adds another splat, collider, thumbnail, and object
+set. Git contains code, documentation, scripts, and curated manifests; R2 owns
+runtime data.
 
-## Live URL
+## Environment
 
-**https://lantern-manuel-dev01s-projects.vercel.app**
+Vercel needs:
 
-Public — Vercel SSO protection is disabled, so a judge can open it with no account.
-The GitHub repo stays private; only the running app is exposed.
-
-## First-time setup
-
-Already done for this project, kept for reference:
-
-```bash
-npm i -g vercel && vercel login
-vercel link                                                  # connect the directory
-vercel blob create-store lantern-assets --access public --yes
-vercel env pull                                              # writes .env.local
-vercel project protection disable --sso                      # make the URL public
+```text
+WORLDLABS_API_KEY
+TRIPO_API_KEY
+DEEPSEEK_API_KEY
+R2_ACCOUNT_ID
+R2_ACCESS_KEY_ID
+R2_SECRET_ACCESS_KEY
+R2_BUCKET
+R2_PUBLIC_URL
 ```
 
-`.env.local` is gitignored (covered by `.env*`). The push script reads both `.env`
-and `.env.local`.
+Railway needs the five `R2_*` variables plus:
 
-## Publishing a world
-
-```bash
-npm run world:generate      # binaries -> public/worlds/, manifest -> data/worlds/
-npm run world:push          # binaries -> Blob
-git add data/worlds && git commit -m "Publish world <id>" && git push
+```text
+LANTERN_BASE_URL=https://lantern-manuel-dev01s-projects.vercel.app
 ```
 
-**Deploy by pushing to git, not with `vercel deploy`.** A CLI deploy uploads the
-working directory from your machine — that was 21.9 MB and died mid-upload on a
-slow connection. Pushing sends ~800 KB and Vercel pulls the repo server-side, which
-built in 29 s.
+The worker never calls World Labs, Tripo, or DeepSeek directly, so their keys
+remain on Vercel.
 
-`world:push` is idempotent: it lists the store once per world and skips what is
-already there, so an unchanged re-run costs one request instead of re-sending
-megabytes. Pass `--world-id <id>` for one world, `--force` to re-upload.
+## Release procedure
 
-**Manifests keep relative paths and are never rewritten.** `vercel.ts` maps
-`/worlds/*` onto the Blob store in production; locally the same paths are served
-from `public/`. This is deliberate — see the warning below.
+1. Verify locally:
 
-## Checking it worked
+   ```powershell
+   npm run sweep
+   npx tsc --noEmit
+   npm run build
+   ```
 
-```bash
-LANTERN_BASE_URL=https://<your-deployment> SHOT_BUDGET_MS=60000 npm run shot -- "/?hud=1"
+2. Review the git diff and confirm no `.env`, signed provider URL, generated
+   world binary, or `shots/` media is staged.
+3. Commit and push to the deployment branch. The linked Vercel project builds
+   from the repository.
+4. Confirm the deployment URL, favicon, landing page, a known gift, and the
+   Constellation.
+
+Prefer the repository deployment path over `vercel deploy` from this machine.
+The CLI uploads the working directory and can include large ignored local
+assets or fail mid-transfer; the git build is smaller and reproducible.
+
+## World assets
+
+Curated local worlds use two layers:
+
+| Part | Local path | Production |
+|---|---|---|
+| manifest | `data/worlds/<id>.json` | bundled with application |
+| splat/collider/thumbnail | `public/worlds/<id>/` | R2 `worlds/<id>/` |
+
+Publish only the assets a hero needs:
+
+```powershell
+npm run world:hero -- <worldId>
 ```
 
-The HUD line is the reliable signal — it prints position, facing, grounded state and
-splat status as text. Trust it over the pixels: software-rendered captures are flaky
-about *timing*, and a black frame usually means the splat had not finished loading,
-not that anything is broken.
+Visitor-generated gifts already mirror their assets into `gifts/<giftId>/` as
+the pipeline advances. Provider URLs are short-lived and must never be written
+into a client-facing manifest.
 
-**Test touch on a real phone.** Headless Chrome reports `pointer: fine`, so the touch
-paths cannot be verified from here at all — the deployment is the first real test of
-the movement stick and look drag.
+## Same-origin invariant
 
-## Why assets are same-origin, and must stay that way
+Manifests keep app-relative `/worlds/*` and `/gifts/*` URLs. In development,
+Next.js serves local public files. In production, `vercel.ts` rewrites the same
+paths to `R2_PUBLIC_URL`.
 
-An earlier version pointed manifests at absolute Blob URLs. It broke the world
-twice over, and both failures are silent:
+Do not replace those paths with absolute R2 URLs. Spark loads splats with range
+requests; a direct cross-origin request introduces a preflight and has previously
+failed as a blank world with only a generic network error. Same-origin paths
+also keep local development from downloading every asset over the internet.
 
-1. **Spark loads splats with HTTP Range requests.** `Range` is not a CORS-safelisted
-   header, so a cross-origin load triggers a preflight — which the Blob host answers
-   with **405**. The only symptom is `could not open this world — network error`,
-   with nothing pointing at CORS.
-2. **Local development pulls every asset back over the internet.** On a slow link a
-   1 MB splat took **153 seconds**, making the app unusable locally.
+## Post-deploy checks
 
-The rewrite fixes both: same-origin everywhere, no preflight, and local dev reads
-from disk. Do not "simplify" this by putting Blob URLs in the manifest.
+- `/` returns 200 and the icon appears in a fresh tab.
+- `/g/Z1MV55219C` reaches its threshold card.
+- entering a gift eventually reports the requested splat LoD, collider, and
+  object count in `?hud=1` mode.
+- a desktop walk remains grounded and stops at the capture-safe boundary.
+- `/constellation` loads public cards.
+- `railway logs` shows the worker targeting the current production URL.
+- system Chrome reports hardware WebGL before any final visual judgement.
 
-## Known issues to expect on the live URL
-
-- **The collider is 8.4 MB.** It still gates *occlusion*, and on a slow connection it
-  is the dominant cost of the first frame — far more than the 986 KB splat.
-  Decimating it is the obvious next performance move.
-
-  It no longer gates *walking*. The player stands on a box built from the world
-  bounds from the first frame, and the real mesh replaces it when it arrives. Before
-  that, the live site dropped every visitor through the floor on a loop: gravity ran
-  with no collider, the player fell out of the world, the recovery respawned them, and
-  they fell again. It never reproduced locally, where the collider loads instantly.
-  **Anything gated on a multi-megabyte asset needs a defined behaviour for the seconds
-  before it arrives** — and that behaviour has to be checked over the network, not on
-  localhost.
-- **`/` is statically prerendered**, so the world list is baked at build time. Adding a
-  world means redeploying. That has to change before Phase 2, where a visitor generates
-  a world that must exist without a rebuild — most likely as a per-gift `/g/<id>` route.
+See [STORAGE.md](STORAGE.md) for bucket setup and [WORKER.md](WORKER.md) for the
+continuation service.
