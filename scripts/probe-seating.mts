@@ -23,6 +23,7 @@ import { MeshBVH } from "three-mesh-bvh";
 
 import { readGift } from "../src/lib/gifts.ts";
 import { mergeSceneGeometry } from "../src/lib/firstPerson.ts";
+import { alignMarbleCollider } from "../src/lib/providers/collider.ts";
 import { findPerch, orientFor, restingHeight, seatOnFloor } from "../src/lib/seating.ts";
 
 const [id, colliderPath, objDir] = process.argv.slice(2);
@@ -105,6 +106,7 @@ const gift = await readGift(id);
 if (!gift?.world) throw new Error(`No world on ${id}.`);
 
 const collider = await load(colliderPath);
+if (gift.world.colliderTransform === "flip-x") alignMarbleCollider(collider.scene);
 const merged = mergeSceneGeometry(collider.scene);
 if (!merged) throw new Error("collider had no meshes.");
 const bvh = new MeshBVH(merged);
@@ -170,25 +172,25 @@ for (const o of gift.world.objects ?? []) {
   node.add(carrier);
 
   node.position.fromArray(o.position);
-  node.rotation.y = o.rotationY ?? 0;
   node.scale.setScalar(o.scale ?? 1);
+
+  // Apply the viewer's orientation before measuring the seating footprint.
+  // Measuring first hid failures for thin objects: once a lighter is laid
+  // down, its long side becomes part of the support area.
+  node.rotation.set(0, o.rotationY ?? 0, 0);
+  const unturned = new THREE.Box3().setFromObject(node).getSize(new THREE.Vector3());
+  const orient = orientFor(unturned, { x: o.position[0], z: o.position[2] }, spawnXZ);
+  if (orient.lay) {
+    const axis = orient.lay === "x" ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(1, 0, 0);
+    node.rotateOnWorldAxis(axis, Math.PI / 2);
+  }
+  node.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), orient.yaw);
+  const dim = new THREE.Box3().setFromObject(node).getSize(new THREE.Vector3());
+  const seatedHeight = dim.y;
 
   // What the server thought this mesh measured, from the raw accessors.
   const spec = (gift.objects ?? []).find((s) => s.modelUrl === o.modelUrl);
   const accessorMinY = spec?.meshBounds ? spec.meshBounds.min[1] * (o.scale ?? 1) : NaN;
-
-  // The same two decisions the viewer makes, from the same functions, so this
-  // tests the real behaviour instead of a drifting copy.
-  const scale = o.scale ?? 1;
-  const dim = {
-    x: (local.max.x - local.min.x) * scale,
-    y: (local.max.y - local.min.y) * scale,
-    z: (local.max.z - local.min.z) * scale,
-  };
-  const orient = orientFor(dim, { x: o.position[0], z: o.position[2] }, spawnXZ);
-
-  // Laying a sliver down swaps its height for the axis that went up.
-  const seatedHeight = orient.lay ? (orient.lay === "x" ? dim.x : dim.z) : dim.y;
   const eyeHeight = Math.max(
     spawnY - (gift.world.spawnFloorY ?? gift.bounds?.min[1] ?? 0),
     1e-3,

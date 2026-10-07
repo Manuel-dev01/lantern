@@ -22,7 +22,7 @@ import { join } from "node:path";
 
 import type { World } from "../src/lib/types.ts";
 import { readGlbBounds, spawnFromBounds } from "../src/lib/providers/glb.ts";
-import { supportedSpawnFromGlb } from "../src/lib/providers/collider.ts";
+import { marbleBounds, supportedSpawnFromGlb } from "../src/lib/providers/collider.ts";
 import {
   existingAsset,
   formatBytes,
@@ -216,7 +216,29 @@ if (best) {
   const colliderPath = saved.collider
     ? join(REPO_ROOT, "public", saved.collider.replace(/^\//, ""))
     : null;
-  const bounds = colliderPath ? await readGlbBounds(colliderPath) : null;
+  const measuredBounds = colliderPath ? await readGlbBounds(colliderPath) : null;
+  const bounds = measuredBounds
+    ? (() => {
+        const transformed = marbleBounds({
+          min: measuredBounds.min,
+          max: measuredBounds.max,
+        });
+        return {
+          ...measuredBounds,
+          ...transformed,
+          size: [
+            transformed.max[0] - transformed.min[0],
+            transformed.max[1] - transformed.min[1],
+            transformed.max[2] - transformed.min[2],
+          ] as [number, number, number],
+          center: [
+            (transformed.max[0] + transformed.min[0]) / 2,
+            (transformed.max[1] + transformed.min[1]) / 2,
+            (transformed.max[2] + transformed.min[2]) / 2,
+          ] as [number, number, number],
+        };
+      })()
+    : null;
 
   if (bounds) {
     const f = (v: number[]) => v.map((n) => n.toFixed(2)).join(", ");
@@ -249,6 +271,7 @@ if (best) {
     splatUrl: splatLods[best],
     splatLods,
     colliderUrl: saved.collider,
+    colliderTransform: "flip-x",
     spawn: placement.spawn,
     spawnFloorY: supported?.floorY,
     target: placement.target,

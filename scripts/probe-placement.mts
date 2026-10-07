@@ -18,6 +18,7 @@ import { MeshBVH } from "three-mesh-bvh";
 
 import { readGift } from "../src/lib/gifts.ts";
 import { mergeSceneGeometry } from "../src/lib/firstPerson.ts";
+import { alignMarbleCollider } from "../src/lib/providers/collider.ts";
 import { seatOnFloor } from "../src/lib/seating.ts";
 
 const id = process.argv[2];
@@ -35,6 +36,7 @@ const gltf = await new GLTFLoader().parseAsync(
   bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer,
   "",
 );
+if (gift.world.colliderTransform === "flip-x") alignMarbleCollider(gltf.scene);
 
 const merged = mergeSceneGeometry(gltf.scene);
 if (!merged) throw new Error("collider had no meshes.");

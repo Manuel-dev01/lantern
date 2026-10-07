@@ -8,15 +8,19 @@
  *   npm run gift:tune -- WBRE2FTFGN --fov 50 --radius 1.25
  *   npm run gift:tune -- 1KAJZTJBK1 --target 0.45,-0.05,-2.01
  *   npm run gift:tune -- WBRE2FTFGN --scale-factor 0.72 --write
+ *   npm run gift:tune -- WBRE2FTFGN --flip-collider --spawn 0,0,0 --floor -0.59
+ *   npm run gift:tune -- 1KAJZTJBK1 --positions "0,0,-2;0.2,0,-2" --write
  */
 
 import { readGift, writeGift } from "../src/lib/gifts.ts";
+import { marbleBounds } from "../src/lib/providers/collider.ts";
 
 const id = process.argv[2];
 if (!id || id.startsWith("--")) {
   console.error(
     "usage: tune-gift.mts <giftId> [--fov n] [--radius n] " +
-      "[--target x,y,z] [--scale-factor n] [--write]",
+      "[--spawn x,y,z] [--floor n] [--target x,y,z] " +
+      "[--positions x,y,z;x,y,z] [--scale-factor n] [--flip-collider] [--write]",
   );
   process.exit(1);
 }
@@ -36,6 +40,16 @@ function positive(name: string): number | undefined {
   return value;
 }
 
+function finite(name: string): number | undefined {
+  const raw = option(name);
+  if (raw === undefined) return undefined;
+  const value = Number(raw);
+  if (!Number.isFinite(value)) {
+    throw new Error(`--${name} must be a number, received ${raw}.`);
+  }
+  return value;
+}
+
 function triple(name: string): [number, number, number] | undefined {
   const raw = option(name);
   if (raw === undefined) return undefined;
@@ -46,16 +60,35 @@ function triple(name: string): [number, number, number] | undefined {
   return values as [number, number, number];
 }
 
+function triples(name: string): Array<[number, number, number]> | undefined {
+  const raw = option(name);
+  if (raw === undefined) return undefined;
+  const values = raw.split(";").map((value) => value.split(",").map(Number));
+  if (!values.length || values.some((value) => value.length !== 3 || !value.every(Number.isFinite))) {
+    throw new Error(`--${name} must be x,y,z;x,y,z, received ${raw}.`);
+  }
+  return values as Array<[number, number, number]>;
+}
+
 const fov = positive("fov");
 if (fov !== undefined && (fov < 35 || fov > 90)) {
   throw new Error("--fov must be between 35 and 90 degrees.");
 }
 const radius = positive("radius");
 const target = triple("target");
+const spawn = triple("spawn");
+const floor = finite("floor");
+const positions = triples("positions");
 const scaleFactor = positive("scale-factor");
+const flipCollider = process.argv.includes("--flip-collider");
 const shouldWrite = process.argv.includes("--write");
 
-if ([fov, radius, target, scaleFactor].every((value) => value === undefined)) {
+if (
+  [fov, radius, target, spawn, floor, positions, scaleFactor].every(
+    (value) => value === undefined,
+  ) &&
+  !flipCollider
+) {
   throw new Error("Nothing to tune. Pass at least one tuning option.");
 }
 
@@ -66,16 +99,41 @@ const before = {
   cameraFov: gift.world.cameraFov,
   explorationRadius: gift.world.explorationRadius,
   target: gift.world.target,
+  spawn: gift.world.spawn,
+  spawnFloorY: gift.world.spawnFloorY,
+  colliderTransform: gift.world.colliderTransform,
+  colliderFrame: gift.colliderFrame,
+  bounds: gift.world.bounds,
   objectScales: gift.world.objects?.map((object) => ({
     id: object.id,
     caption: object.caption,
     scale: object.scale,
+    position: object.position,
   })),
 };
 
 if (fov !== undefined) gift.world.cameraFov = fov;
 if (radius !== undefined) gift.world.explorationRadius = radius;
 if (target !== undefined) gift.world.target = target;
+if (spawn !== undefined) gift.world.spawn = spawn;
+if (floor !== undefined) gift.world.spawnFloorY = floor;
+if (positions !== undefined) {
+  const objects = gift.world.objects ?? [];
+  if (positions.length !== objects.length) {
+    throw new Error(
+      `--positions supplied ${positions.length} positions for ${objects.length} objects.`,
+    );
+  }
+  objects.forEach((object, index) => {
+    object.position = positions[index];
+  });
+}
+if (flipCollider && gift.world.colliderTransform !== "flip-x") {
+  gift.world.colliderTransform = "flip-x";
+  if (gift.world.bounds) gift.world.bounds = marbleBounds(gift.world.bounds);
+  if (gift.bounds) gift.bounds = marbleBounds(gift.bounds);
+}
+if (gift.world.colliderTransform === "flip-x") gift.colliderFrame = "three";
 if (scaleFactor !== undefined) {
   for (const object of gift.world.objects ?? []) {
     object.scale = (object.scale ?? 1) * scaleFactor;
@@ -86,10 +144,16 @@ const after = {
   cameraFov: gift.world.cameraFov,
   explorationRadius: gift.world.explorationRadius,
   target: gift.world.target,
+  spawn: gift.world.spawn,
+  spawnFloorY: gift.world.spawnFloorY,
+  colliderTransform: gift.world.colliderTransform,
+  colliderFrame: gift.colliderFrame,
+  bounds: gift.world.bounds,
   objectScales: gift.world.objects?.map((object) => ({
     id: object.id,
     caption: object.caption,
     scale: object.scale,
+    position: object.position,
   })),
 };
 

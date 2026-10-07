@@ -174,6 +174,7 @@ temporary signed URLs.
 | `npm run gift:probe -- <id> <collider.glb>` | inspect what lies under an object point |
 | `npm run gift:seating -- <id> <collider.glb> <objects-dir>` | run the real seating code against real meshes |
 | `npm run gift:spawn -- <id> <collider.glb>` | verify a supported arrival point |
+| `npm run gift:surfaces -- <id> <collider.glb> [radius] [height]` | find footprint-safe furniture surfaces |
 | `npm run gift:tune -- <id> ...` | dry-run capture-safe FOV/radius/target tuning; add `--write` to save |
 | `npm run world:hero -- <worldId>` | upload only a hero splat and thumbnail |
 | `npm run capture:board -- all` | capture the required evidence stills with system Chrome |

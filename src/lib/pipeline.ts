@@ -8,7 +8,7 @@ import {
 } from "./gifts.ts";
 import { listBlobs, mirrorToBlob } from "./providers/storage.ts";
 import { parseGlbBounds, placeObjects, spawnFromBounds } from "./providers/glb.ts";
-import { supportedSpawnFromGlb } from "./providers/collider.ts";
+import { marbleBounds, supportedSpawnFromGlb } from "./providers/collider.ts";
 import { createTripoClient } from "./providers/tripo.ts";
 import {
   type GenerateWorldResult,
@@ -285,7 +285,8 @@ async function mirrorWorld(gift: Gift): Promise<AdvanceResult> {
     if (next.name === "collider") {
       const measured = parseGlbBounds(mirrored.data);
       if (measured) {
-        gift.bounds = { min: measured.min, max: measured.max };
+        gift.bounds = marbleBounds({ min: measured.min, max: measured.max });
+        gift.colliderFrame = "three";
       }
     }
 
@@ -305,9 +306,20 @@ async function mirrorWorld(gift: Gift): Promise<AdvanceResult> {
       colliderData = new Uint8Array(await res.arrayBuffer());
       if (!gift.bounds) {
         const measured = parseGlbBounds(colliderData);
-        if (measured) gift.bounds = { min: measured.min, max: measured.max };
+        if (measured) {
+          gift.bounds = marbleBounds({ min: measured.min, max: measured.max });
+          gift.colliderFrame = "three";
+        }
       }
     }
+  }
+
+  // Gifts already between mirroring and manifest assembly when this fix was
+  // deployed can carry raw Marble bounds. Normalize them once before deriving
+  // the spawn and remember the frame so a retry cannot rotate them again.
+  if (gift.bounds && gift.colliderFrame !== "three") {
+    gift.bounds = marbleBounds(gift.bounds);
+    gift.colliderFrame = "three";
   }
 
   const splatLods: Record<string, string> = {};
@@ -358,6 +370,7 @@ async function mirrorWorld(gift: Gift): Promise<AdvanceResult> {
     splatUrl: splatLods[best],
     splatLods,
     colliderUrl: hrefs.collider,
+    colliderTransform: "flip-x",
     bounds: gift.bounds,
     spawn,
     spawnFloorY,

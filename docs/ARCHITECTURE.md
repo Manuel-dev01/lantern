@@ -200,9 +200,13 @@ host does not reliably satisfy.
 - `MeshBVH` accelerates collision, floor probes, and surface seating;
 - positional audio attaches a sender recording to an object.
 
-The splat uses Marble's coordinate convention correction. Collider and object
-transforms are kept in the same frame; changing one without the others creates
-the familiar symptom of visible geometry and invisible physics disagreeing.
+Marble exports the splat and collider Y-down and +Z-forward. Lantern applies the
+same 180° X rotation to both before it measures a floor, repairs a spawn, seats
+an object, or draws either asset. Bounds are transformed once and tagged with
+their frame so an interrupted pipeline cannot rotate them twice. Changing only
+one side creates the characteristic failure: a valid source camera appears to
+have no floor, gets relocated into low-confidence edge data, and the splat
+stretches into sheets even though its primary capture is clear.
 
 ### Progressive detail
 
@@ -320,6 +324,7 @@ Placement and spawn changes require the real collider and real object meshes:
 npm run gift:spawn -- <giftId> <collider.glb>
 npm run gift:probe -- <giftId> <collider.glb>
 npm run gift:seating -- <giftId> <collider.glb> <objects-dir>
+npm run gift:surfaces -- <giftId> <collider.glb> [radius] [height]
 ```
 
 Visual splat approval must happen in system Chrome with a real GPU. Headless

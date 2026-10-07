@@ -44,10 +44,14 @@ PEOPLE rule means almost nothing in a real gift is riggable anyway.
 These each looked like a different bug and were the same mistake: trusting the bounding box, or
 trusting a document instead of the store.
 
-- **Stretched black sheets at the edge of rooftop and kitchen splats.** Collider bounds were
-  treated as a visual confidence volume. They are not. Walking is now capped around the capture
-  viewpoint, arrival FOV/target are tunable without regenerating, and the two affected live gifts
-  have explicit safe framing.
+- **Clear source captures opening as stretched black sheets.** The splat was rotated from Marble's
+  Y-down frame into Three.js, but its collider was not. The spawn probe therefore declared the real
+  capture origin unsupported and moved the camera into low-confidence edge data. Splat, collider,
+  bounds, collision, and seating now share the same transform; the rooftop origin is supported at
+  exactly `(0, 0, 0)`. A conservative walking radius still prevents genuine edge failures.
+- **Bowl hanging off the table and spoon on the floor.** Curated kitchen points are now verified
+  against the transformed collider with the oriented object footprint. Bowl and spoon both report
+  `gap to floor 0.0000` on the table; the remaining keepsakes use supported counter positions.
 
 - **Objects outside the world.** The placement arc asked for more depth than the room had.
 - **Objects under the floor.** Rested on `bounds.min.y`, which is not the floor.

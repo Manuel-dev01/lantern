@@ -41,6 +41,8 @@ export interface World {
    * visibly - used for collision and for the depth-only occlusion pass.
    */
   colliderUrl?: string;
+  /** Marble's collider shares the splat's Y-down, +Z-forward frame. */
+  colliderTransform?: "flip-x";
   /** Where the camera starts, in world units. Derived from the collider bounds. */
   spawn?: [number, number, number];
   /** Walkable mesh height under the spawn, measured from the collider. */

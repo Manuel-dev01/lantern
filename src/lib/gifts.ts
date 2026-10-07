@@ -84,6 +84,9 @@ export interface Gift {
   /** Measured from the collider once, then reused when the manifest is built. */
   bounds?: World["bounds"];
 
+  /** Prevents a resumed pre-fix gift from rotating its collider bounds twice. */
+  colliderFrame?: "three";
+
   /** The finished manifest, in the same shape the viewer already renders. */
   world?: World;
 

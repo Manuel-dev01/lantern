@@ -16,6 +16,7 @@ import {
   mergeSceneGeometry,
   surfacesUnderCollider,
 } from "@/lib/firstPerson";
+import { alignMarbleCollider } from "@/lib/providers/collider";
 import { findPerch, orientFor, restingHeight, seatOnFloor } from "@/lib/seating";
 
 type Status = "loading" | "ready" | "error";
@@ -648,8 +649,9 @@ export default function WorldViewer({ world }: { world: World }) {
           ? SplatFileType.PLY
           : SplatFileType.SPZ,
       });
-      // Marble splats arrive Y-down relative to three's convention; the
-      // collider mesh does not. This flip is what aligns the two.
+      // Marble exports both assets Y-down and +Z-forward. The collider is
+      // flipped separately when its manifest opts into that correction; both
+      // must receive the same transform or the camera and physics disagree.
       next.quaternion.set(1, 0, 0, 0);
       next.renderOrder = ORDER.splat;
       scene.add(next);
@@ -770,6 +772,9 @@ export default function WorldViewer({ world }: { world: World }) {
         world.colliderUrl,
         (gltf) => {
         if (disposed) return;
+        if (world.colliderTransform === "flip-x") {
+          alignMarbleCollider(gltf.scene);
+        }
         gltf.scene.traverse((obj) => {
           if ((obj as THREE.Mesh).isMesh) {
             const mesh = obj as THREE.Mesh;

@@ -81,10 +81,10 @@ export function surfacesUnderCollider(
 /**
  * Find a nearby patch that can support the visitor's whole capsule.
  *
- * Outdoor Marble colliders can contain the camera origin while still having
- * no triangle beneath it. WBRE2FTFGN is the concrete example: its saved
- * `(0, 0, 0)` spawn ray hits nothing, so swapping in the real collider made
- * gravity take over above a hole. Bounds cannot detect that; only the mesh can.
+ * A Marble collider can contain the camera origin in its bounds while still
+ * having no triangle beneath it. Bounds cannot detect that; only the mesh can.
+ * The transform must already match the splat before this probe runs, otherwise
+ * a perfectly valid source camera is falsely "repaired" into edge data.
  */
 export function findSupportedSpawn(
   bvh: MeshBVH,
