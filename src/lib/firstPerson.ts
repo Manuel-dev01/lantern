@@ -618,6 +618,18 @@ export class FirstPersonController {
       return;
     }
 
+    // Guided captures are viewpoints, not stationary physics bodies. Let
+    // setCollider make its one measured spawn correction, then hold that exact
+    // point. Running capsule resolution here nudged the camera ~0.1 world
+    // units per second even with input disabled, eventually exposing the same
+    // novel-view sheets that guided mode exists to avoid.
+    if (!this.movementEnabled) {
+      this.position.copy(this.spawn);
+      this.velocity.set(0, 0, 0);
+      this.onGround = true;
+      return;
+    }
+
     this.delta.set(0, 0, 0);
     if (this.movementEnabled) {
       // Horizontal input, in the direction the camera faces.
