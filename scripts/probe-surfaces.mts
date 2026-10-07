@@ -6,6 +6,7 @@
  * test as the viewer and prints places where a keepsake can actually rest.
  *
  *   npm run gift:surfaces -- <giftId> <collider.glb> [radius] [height]
+ *   npm run gift:surfaces -- <giftId> <collider.glb> --screen x,y,width,height
  */
 
 import { readFile } from "node:fs/promises";
@@ -43,6 +44,39 @@ const spawn = gift.world.spawn ?? [0, 0, 0];
 const overhead = bounds.max[1] + 1;
 const radius = Number(radiusArg);
 const height = Number(heightArg);
+
+const screenIndex = process.argv.indexOf("--screen");
+if (screenIndex !== -1) {
+  const screen = process.argv[screenIndex + 1]?.split(",").map(Number);
+  if (!screen || screen.length !== 4 || !screen.every(Number.isFinite)) {
+    throw new Error("--screen must be x,y,width,height.");
+  }
+  const [x, y, width, viewportHeight] = screen;
+  if (width <= 0 || viewportHeight <= 0) throw new Error("screen dimensions must be positive.");
+  const camera = new THREE.PerspectiveCamera(
+    gift.world.cameraFov ?? 60,
+    width / viewportHeight,
+    0.01,
+    1000,
+  );
+  camera.position.fromArray(spawn);
+  camera.lookAt(new THREE.Vector3().fromArray(gift.world.target ?? [0, 0, -1]));
+  camera.updateMatrixWorld(true);
+  const raycaster = new THREE.Raycaster();
+  raycaster.setFromCamera(
+    new THREE.Vector2((x / width) * 2 - 1, 1 - (y / viewportHeight) * 2),
+    camera,
+  );
+  const hits = bvh.raycast(raycaster.ray, THREE.DoubleSide);
+  console.log(`screen ${x},${y} collider hits: ${hits.length}`);
+  for (const hit of hits.slice(0, 12)) {
+    console.log(
+      `${hit.point.x.toFixed(4)}, ${hit.point.y.toFixed(4)}, ${hit.point.z.toFixed(4)} ` +
+        `distance ${hit.distance.toFixed(4)} normalY ${(hit.face?.normal.y ?? 0).toFixed(3)}`,
+    );
+  }
+  process.exit(0);
+}
 
 const query: SurfaceQuery = (x, z) =>
   bvh
