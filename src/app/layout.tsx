@@ -29,7 +29,7 @@ const newsreader = Newsreader({
 export const metadata: Metadata = {
   title: "Lantern — build someone the place they remember",
   description:
-    "Describe a room from a memory. Lantern builds it as a world you can walk through, and gives you a link to send to the person it was about.",
+    "Describe a room from a memory. Lantern builds it as a world someone can step inside, and gives you a link to send to the person it was about.",
   openGraph: {
     title: "Lantern",
     description: "Build someone the place they remember.",

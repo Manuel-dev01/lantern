@@ -135,7 +135,7 @@ export default function VoiceNotes({
           Say something about each of these.
         </h2>
         <p className="mt-3 text-sm leading-relaxed text-white/55">
-          They will hear it when they walk up to it. A sentence is plenty.
+          They will hear it with that object inside the room. A sentence is plenty.
         </p>
 
         <ul className="mt-8 space-y-3">

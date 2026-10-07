@@ -58,6 +58,19 @@ export interface World {
    */
   cameraFov?: number;
   /**
+   * How the recipient may explore this capture.
+   *
+   * A collider proves that a surface exists, not that the Gaussian capture
+   * reconstructed it cleanly from a novel viewpoint. Single-generation
+   * gifts therefore default to `look`; `walk` is an explicit, QA-approved
+   * capability for captures with enough visual coverage.
+   */
+  navigationMode?: "look" | "walk";
+  /** Maximum horizontal look from the arrival direction, in degrees. */
+  viewYawDegrees?: number;
+  /** Maximum vertical look from the arrival direction, in degrees. */
+  viewPitchDegrees?: number;
+  /**
    * Safe walking distance from the capture viewpoint, in world units.
    *
    * The collider answers "can a body stand here?"; it does not answer "does

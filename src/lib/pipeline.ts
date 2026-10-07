@@ -377,10 +377,13 @@ async function mirrorWorld(gift: Gift): Promise<AdvanceResult> {
     target,
     // World Labs returns a collider for physics, not a confidence volume for
     // the splat. Measured gifts can have tens of units of distant collider
-    // geometry around a small clean capture. Start new gifts with a calm lens
-    // and a walking radius anchored to the measured eye height; a curator can
-    // widen either value after checking the actual world on a GPU.
+    // geometry around a small clean capture. A generated gift therefore opens
+    // at its source viewpoint with translation disabled and a modest look cone.
+    // `walk` is reserved for multi-view or curated captures checked on a GPU.
     cameraFov: 55,
+    navigationMode: "look",
+    viewYawDegrees: 22,
+    viewPitchDegrees: 14,
     explorationRadius:
       spawn && spawnFloorY !== undefined
         ? Math.max(0.75, (spawn[1] - spawnFloorY) * 1.2)

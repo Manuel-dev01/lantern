@@ -10,10 +10,11 @@ Ordered by what would cost the most if a judge hit it, not by effort.
 
 ### Source-world quality
 Marble can return a collider larger than the part of a Gaussian capture that reconstructs cleanly.
-The viewer now has a capture-safe walking radius and per-world FOV/target tuning, and new prompts
-ask for a clear arrival patch and continuous surfaces. This prevents a visitor from walking into
-known edge failures; it cannot reconstruct missing central data. A gift with a hole in its primary
-view still needs regeneration.
+Generated gifts now keep the camera at the verified capture viewpoint with a bounded look cone,
+and new prompts ask for a clear arrival patch and continuous surfaces. This prevents a visitor
+from translating into known novel-view failures; it cannot reconstruct missing central data. A
+gift with a hole in its primary view still needs regeneration. Free walking is opt-in only after
+multi-view or curator GPU coverage checks.
 
 ### Object placement
 - Contact shadow strength is a guess (0.5 centre, 0.22 mid). Unverified against a real screen, and
@@ -48,7 +49,8 @@ trusting a document instead of the store.
   Y-down frame into Three.js, but its collider was not. The spawn probe therefore declared the real
   capture origin unsupported and moved the camera into low-confidence edge data. Splat, collider,
   bounds, collision, and seating now share the same transform; the rooftop origin is supported at
-  exactly `(0, 0, 0)`. A conservative walking radius still prevents genuine edge failures.
+  exactly `(0, 0, 0)`. Generated gifts now stay at that verified viewpoint rather than treating a
+  conservative physics radius as proof that nearby novel views are visually sound.
 - **Bowl hanging off the table and spoon on the floor.** Curated kitchen points are now verified
   against the transformed collider with the oriented object footprint. Bowl and spoon both report
   `gap to floor 0.0000` on the table; the remaining keepsakes use supported counter positions.

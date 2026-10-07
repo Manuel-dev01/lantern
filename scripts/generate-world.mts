@@ -276,6 +276,9 @@ if (best) {
     spawnFloorY: supported?.floorY,
     target: placement.target,
     cameraFov: previous?.cameraFov ?? 55,
+    navigationMode: previous?.navigationMode ?? "look",
+    viewYawDegrees: previous?.viewYawDegrees ?? 22,
+    viewPitchDegrees: previous?.viewPitchDegrees ?? 14,
     explorationRadius:
       previous?.explorationRadius ??
       (supported

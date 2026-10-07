@@ -11,7 +11,7 @@ export interface HeroWorldProps {
 /**
  * A real world behind the first screen.
  *
- * The landing page explains that Lantern builds places you can walk through.
+ * The landing page explains that Lantern builds places someone can enter.
  * Saying so over a gradient asks to be believed; saying it over an actual
  * gaussian splat of an actual generated room does not. For a 3D hackathon
  * that difference is worth the megabytes.

@@ -4,7 +4,8 @@ import { MeshBVH } from "three-mesh-bvh";
 import type { FloorInfo, Surface } from "./seating.ts";
 
 /**
- * Walking inside a generated world.
+ * Looking around and, for explicitly approved captures, walking inside a
+ * generated world.
  *
  * Marble worlds are not metric and every world has a different size - the first
  * bedroom measured 2.63 x 1.47 x 3.57 units - so no movement constant here can
@@ -188,6 +189,12 @@ export interface FirstPersonOptions {
    * boundary protects image quality; mesh collision still protects physics.
    */
   explorationRadius?: number;
+  /** Translation is opt-in because a collider is not a splat confidence map. */
+  movementEnabled?: boolean;
+  /** Horizontal look limit around the arrival direction, in radians. */
+  yawLimit?: number;
+  /** Vertical look limit around the arrival direction, in radians. */
+  pitchLimit?: number;
 }
 
 export class FirstPersonController {
@@ -198,6 +205,10 @@ export class FirstPersonController {
   private readonly ceilingY: number | null;
   private readonly spawn: THREE.Vector3;
   private readonly explorationRadius: number | null;
+  private readonly movementEnabled: boolean;
+  private readonly initialYaw: number;
+  private readonly yawLimit: number | null;
+  private readonly pitchLimit: number;
 
   private bvh: MeshBVH | null = null;
   /** True while standing on the bounding-box stand-in rather than real geometry. */
@@ -262,6 +273,9 @@ export class FirstPersonController {
       floorY,
       ceilingY,
       explorationRadius,
+      movementEnabled = true,
+      yawLimit,
+      pitchLimit,
     }: FirstPersonOptions,
   ) {
     this.camera = camera;
@@ -274,6 +288,12 @@ export class FirstPersonController {
       explorationRadius !== undefined && explorationRadius > 0
         ? explorationRadius
         : null;
+    this.movementEnabled = movementEnabled;
+    this.yawLimit = yawLimit !== undefined && yawLimit > 0 ? yawLimit : null;
+    this.pitchLimit = Math.min(
+      pitchLimit !== undefined && pitchLimit > 0 ? pitchLimit : PITCH_LIMIT,
+      PITCH_LIMIT,
+    );
     this.position.copy(spawn);
 
     // Face the middle of the world rather than an arbitrary axis. A camera
@@ -282,6 +302,7 @@ export class FirstPersonController {
     const dx = lookAt.x - spawn.x;
     const dz = lookAt.z - spawn.z;
     this.yaw = Math.atan2(-dx, -dz);
+    this.initialYaw = this.yaw;
     this.camera.rotation.order = "YXZ";
 
     this.onKeyDown = (e) => {
@@ -293,7 +314,7 @@ export class FirstPersonController {
       if (document.pointerLockElement !== this.domElement) return;
       this.yaw -= e.movementX * 0.002;
       this.pitch -= e.movementY * 0.002;
-      this.pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, this.pitch));
+      this.clampLook();
     };
     this.onClick = () => {
       // Pointer lock means nothing on touch, and requesting it there just
@@ -307,7 +328,9 @@ export class FirstPersonController {
     this.onTouchStart = (e) => {
       const half = this.domElement.clientWidth / 2;
       for (const touch of Array.from(e.changedTouches)) {
-        if (touch.clientX < half && !this.moveTouch) {
+        if (!this.movementEnabled && !this.lookTouch) {
+          this.lookTouch = { id: touch.identifier, x: touch.clientX, y: touch.clientY };
+        } else if (this.movementEnabled && touch.clientX < half && !this.moveTouch) {
           this.moveTouch = {
             id: touch.identifier,
             originX: touch.clientX,
@@ -338,7 +361,7 @@ export class FirstPersonController {
         } else if (this.lookTouch && touch.identifier === this.lookTouch.id) {
           this.yaw -= (touch.clientX - this.lookTouch.x) * TOUCH_LOOK_SPEED;
           this.pitch -= (touch.clientY - this.lookTouch.y) * TOUCH_LOOK_SPEED;
-          this.pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, this.pitch));
+          this.clampLook();
           this.lookTouch.x = touch.clientX;
           this.lookTouch.y = touch.clientY;
         }
@@ -379,6 +402,21 @@ export class FirstPersonController {
     this.joystickBase = base;
     this.joystickThumb = thumb;
     this.hideJoystick();
+  }
+
+  /** Keep guided captures inside the view cone that was visually verified. */
+  private clampLook() {
+    this.pitch = Math.max(-this.pitchLimit, Math.min(this.pitchLimit, this.pitch));
+    if (this.yawLimit === null) return;
+
+    // Normalize around the initial direction so crossing ±PI cannot bypass
+    // the cone or snap the camera through a full turn.
+    const offset = Math.atan2(
+      Math.sin(this.yaw - this.initialYaw),
+      Math.cos(this.yaw - this.initialYaw),
+    );
+    this.yaw =
+      this.initialYaw + Math.max(-this.yawLimit, Math.min(this.yawLimit, offset));
   }
 
   private showJoystick(x: number, y: number, dx: number, dy: number) {
@@ -460,12 +498,10 @@ export class FirstPersonController {
   /**
    * A stand-in floor and walls, built from the world's bounding box.
    *
-   * The real collider is several megabytes and gates walking completely, which
-   * on a slow connection means minutes of standing still. The bounds are
-   * already in the manifest and cost nothing, so a plain box gives the player
-   * a floor to stand on and walls to stop at from the first frame. The real
-   * mesh replaces it when it arrives, and furniture appears as you would
-   * expect - as detail added to a room you were already standing in.
+   * The real collider is several megabytes. The bounds are already in the
+   * manifest and cost nothing, so a plain box gives the camera a floor from
+   * the first frame. The real mesh replaces it when it arrives and provides
+   * exact support, occlusion, and optional walk collision.
    *
    * Never overwrites a real collider.
    */
@@ -582,34 +618,36 @@ export class FirstPersonController {
       return;
     }
 
-    // Horizontal input, in the direction the camera faces.
-    this.forward.set(-Math.sin(this.yaw), 0, -Math.cos(this.yaw));
-    this.right.set(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
-
     this.delta.set(0, 0, 0);
-    if (this.autoWalk > 0 || this.keys.has("KeyW") || this.keys.has("ArrowUp")) {
-      this.delta.add(this.forward);
-    }
-    if (this.keys.has("KeyS") || this.keys.has("ArrowDown")) this.delta.sub(this.forward);
-    if (this.keys.has("KeyD") || this.keys.has("ArrowRight")) this.delta.add(this.right);
-    if (this.keys.has("KeyA") || this.keys.has("ArrowLeft")) this.delta.sub(this.right);
+    if (this.movementEnabled) {
+      // Horizontal input, in the direction the camera faces.
+      this.forward.set(-Math.sin(this.yaw), 0, -Math.cos(this.yaw));
+      this.right.set(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
 
-    // Screen y grows downward, so pushing the stick up walks forward.
-    if (this.moveAxis.lengthSq() > 0) {
-      this.delta.addScaledVector(this.forward, -this.moveAxis.y);
-      this.delta.addScaledVector(this.right, this.moveAxis.x);
-    }
+      if (this.autoWalk > 0 || this.keys.has("KeyW") || this.keys.has("ArrowUp")) {
+        this.delta.add(this.forward);
+      }
+      if (this.keys.has("KeyS") || this.keys.has("ArrowDown")) this.delta.sub(this.forward);
+      if (this.keys.has("KeyD") || this.keys.has("ArrowRight")) this.delta.add(this.right);
+      if (this.keys.has("KeyA") || this.keys.has("ArrowLeft")) this.delta.sub(this.right);
 
-    const speed =
-      (this.keys.has("ShiftLeft") ? RUN_SPEED : WALK_SPEED) *
-      scale *
-      (this.autoWalk > 0 ? this.autoWalk : 1);
-    const magnitude = Math.min(this.delta.length(), 1);
-    if (magnitude > 0) this.delta.normalize().multiplyScalar(speed * dt * magnitude);
+      // Screen y grows downward, so pushing the stick up walks forward.
+      if (this.moveAxis.lengthSq() > 0) {
+        this.delta.addScaledVector(this.forward, -this.moveAxis.y);
+        this.delta.addScaledVector(this.right, this.moveAxis.x);
+      }
 
-    if (this.onGround && this.keys.has("Space")) {
-      this.velocity.y = JUMP_SPEED * scale;
-      this.onGround = false;
+      const speed =
+        (this.keys.has("ShiftLeft") ? RUN_SPEED : WALK_SPEED) *
+        scale *
+        (this.autoWalk > 0 ? this.autoWalk : 1);
+      const magnitude = Math.min(this.delta.length(), 1);
+      if (magnitude > 0) this.delta.normalize().multiplyScalar(speed * dt * magnitude);
+
+      if (this.onGround && this.keys.has("Space")) {
+        this.velocity.y = JUMP_SPEED * scale;
+        this.onGround = false;
+      }
     }
 
     this.velocity.y -= GRAVITY * scale * dt;
@@ -627,7 +665,8 @@ export class FirstPersonController {
     // across because distant skyline geometry entered the collider, while the
     // usable rooftop was only the patch around the source camera. Walking to
     // the collider edge exposed stretched, low-confidence Gaussians. Keep the
-    // body inside the capture-safe disc; looking around remains unrestricted.
+    // body inside the capture-safe disc. Generated single-view gifts go
+    // further and disable translation; this remains for curated walk mode.
     if (this.explorationRadius !== null) {
       const dx = this.position.x - this.spawn.x;
       const dz = this.position.z - this.spawn.z;

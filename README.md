@@ -4,7 +4,7 @@
 
 Lantern turns a written memory into a shareable place: World Labs Marble builds
 the environment, Tripo builds the remembered objects, and a browser viewer lets
-the recipient enter, look around, and walk through it.
+the recipient enter and look around it from a capture-safe viewpoint.
 
 **Tripothon S1 · Direction 04 — App**
 
@@ -37,9 +37,9 @@ The shortest complete tour is about five minutes and needs no account.
    desktop hardware; the page remains complete when the renderer is skipped.
 2. **Receive a gift.** Open [the sewing room](https://lantern-manuel-dev01s-projects.vercel.app/g/Z1MV55219C),
    read the threshold, then choose **step inside**.
-3. **Walk the memory.** Click once, use **WASD**, and move around the independent
-   Tripo objects inside the Marble environment. Press **Esc** to release the
-   cursor.
+3. **Enter the memory.** Click once and look around the independent Tripo
+   objects inside the Marble environment. Lantern holds the camera at the
+   capture's verified viewpoint; press **Esc** to release the cursor.
 4. **Compare a second world.** Open [the Lagos kitchen](https://lantern-manuel-dev01s-projects.vercel.app/g/1KAJZTJBK1).
    It demonstrates progressive splat loading, surface-aware object seating,
    collision, and depth occlusion.
@@ -60,7 +60,7 @@ gives it the etiquette of a gift:
 - the recipient opens one link, sees their name, and decides when to enter;
 - the place streams from a light preview to the full-resolution splat without
   resetting the camera;
-- remembered objects remain real meshes that can be placed, approached, and
+- remembered objects remain real meshes that can be placed, inspected, and
   occluded by the generated room;
 - the same measured collider grounds the visitor, supports objects, and writes
   depth for the splat/mesh composite;
@@ -79,8 +79,8 @@ flowchart LR
     F --> G
     G --> H[Next.js gift route]
     H --> I[Spark splat renderer]
-    H --> J[Three.js objects + BVH collision]
-    I --> K[Walkable gift]
+    H --> J[Three.js objects + BVH support]
+    I --> K[Guided spatial gift]
     J --> K
 ```
 
@@ -101,14 +101,17 @@ failure model, rendering pipeline, and directory map.
 
 ## Controls
 
-| Platform | Look | Move | Other |
+| Mode | Look | Move | Other |
 |---|---|---|---|
-| Desktop | click to capture pointer, move mouse | WASD or arrows; Shift to move faster | Space jumps; Esc releases pointer |
-| Touch | drag the right half | drag the left half from any starting point | on-screen stick follows the thumb |
+| Desktop · generated gift | click to capture pointer, move mouse | fixed at verified viewpoint | Esc releases pointer |
+| Touch · generated gift | drag anywhere | fixed at verified viewpoint | — |
+| Curated walk capture | mouse or right thumb | WASD/arrows or left thumb | enabled only after a GPU coverage check |
 
-The viewer deliberately keeps visitors near the viewpoint where the generated
-splat is reliable. The collider may contain distant geometry that is physically
-valid but visually under-reconstructed; it is not used as a quality boundary.
+Generated gifts deliberately keep visitors at the viewpoint where the splat is
+reliable and limit how far they can turn. A collider may contain distant
+geometry that is physically valid but visually under-reconstructed; it is not
+a quality boundary. Free translation is an explicit per-world capability, not
+something Lantern infers from the existence of a floor mesh.
 
 ## Tripothon fit
 
@@ -217,8 +220,10 @@ render.
 ## Honest constraints
 
 - A Gaussian splat is a view-dependent reconstruction, not a watertight 360°
-  polygon world. Lantern constrains walking to a capture-safe region; a poor
-  generation can still need regeneration or human framing.
+  polygon world. Single-generation gifts use a capture-safe viewpoint and
+  bounded look cone; a poor generation can still need regeneration or human
+  framing. Free walking is reserved for captures verified from every allowed
+  angle, ideally generated with multi-view, panorama, or video evidence.
 - Full-resolution worlds are large. A lighter LoD opens first, and the UI says
   when detail is still enhancing underneath.
 - Generation uses paid third-party APIs and takes minutes. The demo never

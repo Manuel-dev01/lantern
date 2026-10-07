@@ -6,7 +6,7 @@ import { readableName, readSharedIndex } from "@/lib/gifts";
  * Every gift whose sender chose to show it.
  *
  * Three jobs at once. It is the answer to a cold start - a visitor who has not
- * been sent anything still has something to walk into. It is the browsing
+ * been sent anything still has somewhere to enter. It is the browsing
  * surface a judge needs, because the create flow takes five minutes and nobody
  * evaluating forty entries will wait through it on every one. And it is the
  * only place the scale of the thing is visible: one gift is a demo, forty

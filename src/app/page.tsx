@@ -14,7 +14,7 @@ import { readableName, readSharedIndex } from "@/lib/gifts";
  *
  * It used to be a live splat world filling the viewport with two small links
  * over it, which proved the product in two seconds and explained nothing. A
- * judge arriving cold could walk around it indefinitely without learning that
+ * judge arriving cold could explore it indefinitely without learning that
  * the thing is a gift made for one named person - which is the whole idea,
  * and half the score.
  *
@@ -45,7 +45,7 @@ const gutter = "clamp(24px, 7vw, 112px)";
  *
  * Pinned rather than "the latest world", because this one is chosen: a small
  * interior that reads well out of focus and behind text. Only its splat is in
- * storage - no collider, no objects - since nobody walks through the hero.
+ * storage - no collider, no objects - since nobody controls the hero.
  *
  * Shown at 500k, not 100k. The cheaper level was tried and it was a false
  * economy: a fifth of the gaussians is a fifth of the detail, and behind a
@@ -122,7 +122,7 @@ export default async function Home() {
       {/* ---- 01 Hero ---------------------------------------------------- */}
       <section style={{ position: "relative", minHeight: "100svh", overflow: "hidden" }}>
         {/* A real generated room, under the designed light. Saying the product
-            builds places you can walk through, over an actual splat of one,
+            builds places you can step inside, over an actual splat of one,
             is the one claim on this page that proves itself. It fades in only
             once decoded, so the page is complete without it. */}
         <HeroBackdrop splatUrl={HERO_WORLD.splatUrl} />
@@ -200,8 +200,8 @@ export default async function Home() {
               textWrap: "pretty",
             }}
           >
-            Describe a room from a memory. Lantern builds it as a world you can walk through, and
-            gives you a link to send to the person it was about.
+            Describe a room from a memory. Lantern builds it as a world someone can step inside,
+            and gives you a link to send to the person it was about.
           </p>
 
           <div
@@ -336,7 +336,7 @@ export default async function Home() {
         <Step
           numeral="ii"
           title="Lantern builds it."
-          body="World Labs’ Marble turns the description into a world you walk through in first person. Tripo makes the objects that were in it, the water tank, the aerials, and sets them into the scene so they sit behind and in front of what’s already there."
+          body="World Labs’ Marble turns the description into a spatial world you enter at its strongest viewpoint. Tripo makes the objects that were in it, the water tank, the aerials, and sets them into the scene so they sit behind and in front of what’s already there."
           reverse
         >
           <div
@@ -381,7 +381,7 @@ export default async function Home() {
         <Step
           numeral="iii"
           title="You leave your voice in it."
-          body="Record a short note on any object. When they walk towards it, your voice fades in. Then send the link."
+          body="Record a short note on any object. Your voice belongs to that remembered thing inside the room. Then send the link."
         >
           <VoiceNoteList />
         </Step>
@@ -429,7 +429,7 @@ export default async function Home() {
             href="/constellation"
             className="-m-2 inline-flex min-h-11 items-center p-2 text-sm whitespace-nowrap text-white/60 transition hover:text-white/90"
           >
-            walk the constellation
+            explore the constellation
           </Link>
         </div>
 

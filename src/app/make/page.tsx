@@ -2,7 +2,7 @@ import Intake from "@/components/Intake";
 
 export const metadata = {
   title: "Make a gift · Lantern",
-  description: "Describe a place you remember. It becomes somewhere they can walk.",
+  description: "Describe a place you remember. It becomes somewhere they can enter.",
 };
 
 export default function MakePage() {

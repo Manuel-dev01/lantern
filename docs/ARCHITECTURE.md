@@ -126,8 +126,8 @@ When Marble finishes, Lantern mirrors:
 - the provider caption.
 
 The collider is measured while its bytes are already in memory. Bounds, a
-supported spawn, floor height, initial target, FOV, and capture-safe walking
-radius become part of the durable `World` manifest.
+supported spawn, floor height, initial target, FOV, guided-view limits, and the
+optional curated walking radius become part of the durable `World` manifest.
 
 ### 4. Build objects
 
@@ -223,24 +223,27 @@ These are three related but distinct questions:
 |---|---|
 | Can the visitor stand here? | collider triangles + capsule collision |
 | Can the object rest here? | BVH surface probes under its footprint |
-| Does the splat look reliable here? | capture viewpoint + curated exploration radius |
+| Does the splat look reliable here? | capture viewpoint + GPU visual verification |
 
 A collider can include distant skyline, reflected, or low-confidence geometry.
 That geometry may be physically measurable while the corresponding Gaussian
 view stretches into sheets when approached from a novel angle. Lantern therefore
 does not equate collider bounds with visual validity.
 
-New worlds receive a conservative `explorationRadius` around the verified spawn
-and a 55° arrival lens. Curated gifts can tune `cameraFov`, `target`, and radius
-without regenerating paid assets:
+New worlds receive `navigationMode: "look"`, a bounded yaw/pitch cone, and a 55°
+arrival lens. Translation is disabled because the generated collider contains
+no confidence value for the visible splat. Curated gifts can tune the arrival
+frame without regenerating paid assets:
 
 ```powershell
-npm run gift:tune -- <giftId> --fov 52 --radius 1.1 --target 0.4,0,-2 --write
+npm run gift:tune -- <giftId> --fov 52 --target 0.4,0,-2 --yaw 22 --pitch 14 --write
 ```
 
-The controller still allows unrestricted looking, but walking stops at the
-capture-safe boundary. If the source generation itself has a central hole or
-severe smear, tuning is not a repair; that world must be regenerated.
+`navigationMode: "walk"` remains available only for a multi-view or curated
+capture that has passed a GPU check across its full allowed radius. Its
+`explorationRadius` is a second guard, not proof of visual coverage. If the
+source generation itself has a central hole or severe smear, camera tuning is
+not a repair; that world must be regenerated.
 
 Object support is stricter than a centre ray. Multiple footprint probes must
 agree on a surface, then the underside is placed exactly on it. Offline probes

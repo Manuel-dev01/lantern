@@ -144,15 +144,18 @@ export default function WorldViewer({ world }: { world: World }) {
   // Both are knowable at mount, so they are computed once in the initialiser
   // rather than set from inside the effect, which would cost a second render.
   // Safe to touch window here: the viewer is only ever loaded with ssr: false.
-  const [walkable] = useState(() => {
+  const [interactive] = useState(() => {
     const q = new URLSearchParams(window.location.search);
     // A pinned camera is a photograph, so no invitation to walk is drawn over
     // it - that caption would otherwise land in every asset board still.
     return q.get("mode") !== "orbit" && !q.get("cam");
   });
+  // Missing means look-only so every existing single-generation gift becomes
+  // safe immediately. Walking must be deliberately approved per manifest.
+  const canWalk = world.navigationMode === "walk";
   const [touch] = useState(isTouchDevice);
-  // The collider is by far the heaviest asset and gates walking entirely,
-  // so its arrival is worth its own state and its own progress number.
+  // The collider is by far the heaviest asset and supplies placement, depth,
+  // and optional walk physics, so its arrival gets its own progress number.
   // Starts true when there is nothing to wait for, so the "adding detail" note
   // never appears for a world without a collider - and so this is not set
   // synchronously from inside the effect.
@@ -184,7 +187,8 @@ export default function WorldViewer({ world }: { world: World }) {
     // object" apart from "my object was never there".
     const noCollider = debug === "nocollider";
     // Orbit is the inspection camera: it needs no pointer lock, so it is the
-    // only mode that works in a headless capture. Walking is the real one.
+    // only mode that works in a headless capture. Guided view is what the
+    // recipient receives.
     const orbitMode = params.get("mode") === "orbit";
     // Walks forward on its own, so collision can be verified without hands.
     // `?autowalk=6` walks forward at 6x speed; any positive number works.
@@ -199,8 +203,8 @@ export default function WorldViewer({ world }: { world: World }) {
     const ORDER = { splat: 0, occluder: 1, shadow: 2, gift: 3 };
 
     /**
-     * Long enough that walking back past an object does not restart it
-     * mid-sentence, short enough that coming back later plays it again.
+     * Long enough that moving around an approved walk capture does not restart
+     * it mid-sentence, short enough that coming back later plays it again.
      */
     const VOICE_COOLDOWN_MS = 20_000;
 
@@ -342,8 +346,15 @@ export default function WorldViewer({ world }: { world: World }) {
           ],
         ),
         explorationRadius: world.explorationRadius,
+        movementEnabled: canWalk,
+        yawLimit: canWalk
+          ? undefined
+          : THREE.MathUtils.degToRad(world.viewYawDegrees ?? 22),
+        pitchLimit: canWalk
+          ? undefined
+          : THREE.MathUtils.degToRad(world.viewPitchDegrees ?? 14),
       });
-      player.autoWalk = autoWalk;
+      player.autoWalk = canWalk ? autoWalk : 0;
       player.setJoystickElements(stickRef.current, thumbRef.current);
       // Stand on the bounding box straight away. The real collider is several
       // megabytes and would otherwise leave the player frozen until it lands.
@@ -360,9 +371,8 @@ export default function WorldViewer({ world }: { world: World }) {
      *
      * Marble makes the room and Tripo makes the pan; only the person who sent
      * it can say what the pan was for. Attaching that to the object rather
-     * than playing it over the whole world is the point - you hear it because
-     * you walked towards the thing it is about, which is a sentence no menu
-     * can deliver.
+     * than playing it over the whole world is the point: its voice belongs to
+     * the remembered thing, not to a menu.
      *
      * Browsers will not start audio without a gesture. The "step inside"
      * button is one, which is why the door earns its place twice.
@@ -844,11 +854,11 @@ export default function WorldViewer({ world }: { world: World }) {
         },
         () => {
           // Without this the note said "adding detail…" for the rest of the
-          // session and the visitor walked through the furniture, because
-          // setGround only ever ran on success. The room is still walkable on
-          // the bounding box, so this is a quieter world, not a broken one.
+          // session because setGround only ever ran on success. The guided
+          // room still opens on bounding-box support, so this is a quieter
+          // world, not a broken one.
           if (disposed) return;
-          console.warn("Lantern: the collider did not load; walking the bounding box instead.");
+          console.warn("Lantern: the collider did not load; using bounding-box support.");
           setGroundProgress(null);
           setGround(true);
         },
@@ -973,10 +983,9 @@ export default function WorldViewer({ world }: { world: World }) {
         for (const mixer of mixers) mixer.update(step);
       }
 
-      // Voice notes play because you walked towards the thing they are about.
-      // The distance model does the fading; this only decides when to start,
-      // and the cooldown stops a note restarting every time you step back and
-      // forth across its edge.
+      // Voice notes belong spatially to the thing they are about. The distance
+      // model does the fading; this only decides when to start, and the
+      // cooldown stops a note immediately restarting.
       if (voices.length) {
         camera.getWorldPosition(listenerAt);
         for (const sound of voices) {
@@ -1032,12 +1041,19 @@ export default function WorldViewer({ world }: { world: World }) {
     // sender finishes their voice notes. The effect tore down the renderer and
     // re-fetched the entire level-of-detail ladder, up to 23 MB, dropping them
     // back to "opening… 0%" in a room they were already standing in.
-  }, [world.id, world.splatUrl, world.colliderUrl]);
+  }, [
+    world.id,
+    world.splatUrl,
+    world.colliderUrl,
+    world.navigationMode,
+    world.viewYawDegrees,
+    world.viewPitchDegrees,
+  ]);
 
   return (
     <div className="relative h-full w-full">
       {/* touch-action none: the browser must not claim the gesture for
-          scrolling or pull-to-refresh while someone is walking. */}
+          scrolling or pull-to-refresh while someone explores. */}
       <div ref={mountRef} className="h-full w-full touch-none" />
       {status === "loading" && (
         <div className="pointer-events-none absolute inset-0 grid place-items-center">
@@ -1071,22 +1087,25 @@ export default function WorldViewer({ world }: { world: World }) {
         </div>
       )}
 
-      {/* Pointer lock needs a real click to start, so the invitation to walk
-          has to be part of the page rather than something that just happens. */}
-      {status === "ready" && walkable && (
+      {/* Pointer lock needs a real click to start, so the invitation has to be
+          part of the page rather than something that just happens. */}
+      {status === "ready" && interactive && (
         <div className="pointer-events-none absolute inset-x-0 bottom-10 grid place-items-center">
           <p className="rounded-full bg-black/40 px-4 py-2 text-xs tracking-wide text-white/70 backdrop-blur-sm">
-            {touch
-              ? "left thumb to walk · right thumb to look"
-              : "click to look around · WASD to walk"}
+            {canWalk
+              ? touch
+                ? "left thumb to walk · right thumb to look"
+                : "click to look around · WASD to walk"
+              : touch
+                ? "drag to look around · capture-safe view"
+                : "click to look around · capture-safe viewpoint"}
           </p>
         </div>
       )}
 
-      {/* The room is walkable from the bounding box immediately; the real
-          collider only adds furniture to bump into. Worth saying, not worth
-          blocking on. */}
-      {status === "ready" && walkable && !ground && (
+      {/* The visible room opens before the real collider. It still matters for
+          object support and depth occlusion, but is not worth blocking on. */}
+      {status === "ready" && interactive && !ground && (
         <div className="pointer-events-none absolute inset-x-0 bottom-4 grid place-items-center">
           <p className="text-[11px] tracking-wide text-white/55">
             {groundProgress === null

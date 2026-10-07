@@ -56,7 +56,7 @@ const launch90: Scene[] = [
   { name: "occlusion", source: asset("occlusion.png"), title: "One depth system lets both share the room.", label: "OCCLUSION · NORMAL VIEW", url: "/g/1KAJZTJBK1", duration: 5, cursor: [1500, 830, 960, 500], focus: [1020, 520] },
   { name: "collider", source: asset("occlusion-collider.png"), title: "The hidden collider is the proof.", label: "EDITORIAL EVIDENCE · COLLIDER DEBUG", url: "/g/1KAJZTJBK1?debug=collider", duration: 4, cursor: [960, 760, 1120, 510], focus: [1000, 520] },
   { name: "constellation", source: asset("constellation.png"), title: "Every room was made for somebody by name.", label: "LIVE CONSTELLATION", url: "/constellation", duration: 7, cursor: [1640, 880, 1040, 760], focus: [1050, 740] },
-  { name: "end", title: "Not a generated image. A place they can walk through.", subtitle: "LANTERN", duration: 8 },
+  { name: "end", title: "Not just a generated image. A place they can step inside.", subtitle: "LANTERN", duration: 8 },
 ];
 
 const preview18: Scene[] = [
@@ -69,7 +69,7 @@ const preview18: Scene[] = [
 const demo300: Scene[] = [
   { name: "demo-title", title: "What if a memory became somewhere you could enter?", subtitle: "LANTERN · PRODUCT DEMO", duration: 8 },
   { name: "demo-threshold-one", source: asset("threshold.png"), title: "A gift begins at the threshold.", label: "LIVE PRODUCT · EXISTING GIFT", url: "/g/1KAJZTJBK1", duration: 14, cursor: [1540, 850, 980, 715] },
-  { name: "demo-arrival-one", source: asset("arrival.png"), title: "Then it opens into a walkable room.", label: "FULL-RESOLUTION WORLD", url: "/g/Z1MV55219C", duration: 15, cursor: [1020, 850, 1180, 620] },
+  { name: "demo-arrival-one", source: asset("arrival.png"), title: "Then it opens into a spatial room.", label: "FULL-RESOLUTION WORLD", url: "/g/Z1MV55219C", duration: 15, cursor: [1020, 850, 1180, 620] },
   { name: "demo-recipient", title: "One link. One name. A place made for them.", subtitle: "THE RECIPIENT EXPERIENCE", duration: 10 },
   { name: "demo-landing", source: sweep("landing-desktop.png"), title: "Start with one remembered place.", label: "LIVE LANDING PAGE", url: "/", duration: 15, cursor: [1500, 875, 230, 840] },
   { name: "demo-make-one", source: sweep("make-desktop.png"), title: "First, name the person.", label: "REAL CREATION FLOW · STEP 1", url: "/make", duration: 16, cursor: [420, 820, 770, 510] },
@@ -81,14 +81,14 @@ const demo300: Scene[] = [
   { name: "demo-objects", source: asset("object-close.png"), title: "Independent objects stay inspectable.", label: "VERIFIED LIVE COMPOSITE", url: "/g/Z1MV55219C", duration: 16, cursor: [1570, 790, 1010, 645] },
   { name: "demo-occlusion", source: asset("occlusion.png"), title: "Depth lets both systems share one room.", label: "OCCLUSION · NORMAL VIEW", url: "/g/1KAJZTJBK1", duration: 15, cursor: [1490, 835, 950, 500] },
   { name: "demo-collider", source: asset("occlusion-collider.png"), title: "The hidden collider is the evidence.", label: "EDITORIAL EVIDENCE · DEBUG VIEW", url: "/g/1KAJZTJBK1?debug=collider", duration: 12, cursor: [950, 770, 1130, 510] },
-  { name: "demo-grounded", title: "Supported objects. Grounded cameras. Walkable space.", subtitle: "PLACEMENT + COLLISION", duration: 10 },
+  { name: "demo-grounded", title: "Supported objects. Grounded cameras. Spatial depth.", subtitle: "PLACEMENT + COLLISION", duration: 10 },
   { name: "demo-arrival-two", source: asset("arrival.png"), title: "The viewer arrives inside the capture.", label: "VERIFIED LIVE WORLD", url: "/g/Z1MV55219C", duration: 18, cursor: [960, 840, 1060, 610] },
   { name: "demo-kitchen", source: asset("occlusion.png"), title: "A different memory, using the same system.", label: "EXISTING GIFT", url: "/g/1KAJZTJBK1", duration: 16, cursor: [1460, 820, 1020, 570] },
   { name: "demo-sharing", title: "The sender shares a gift—not an asset folder.", subtitle: "ONE LINK", duration: 10 },
   { name: "demo-threshold-two", source: asset("threshold.png"), title: "The recipient decides when to enter.", label: "RECIPIENT-FIRST REVEAL", url: "/g/1KAJZTJBK1", duration: 15, cursor: [1470, 840, 970, 710] },
   { name: "demo-constellation", source: asset("constellation.png"), title: "Every room was made for somebody by name.", label: "LIVE CONSTELLATION", url: "/constellation", duration: 18, cursor: [1630, 880, 1060, 750] },
   { name: "demo-evidence", title: "Real product states. Labelled evidence. No fabricated outcomes.", subtitle: "DEMO INTEGRITY", duration: 10 },
-  { name: "demo-end", title: "Not a generated image. A place they can walk through.", subtitle: "LANTERN", duration: 16 },
+  { name: "demo-end", title: "Not just a generated image. A place they can step inside.", subtitle: "LANTERN", duration: 16 },
 ];
 
 function esc(value: string) {

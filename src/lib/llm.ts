@@ -35,10 +35,10 @@ export interface GiftPlan {
  *
  * Left to itself the model writes the scene as a photograph of the moment -
  * "two brothers stand around a dismantled bicycle". Marble renders what it is
- * told, so that becomes figures standing in a room someone is about to walk
+ * told, so that becomes figures standing in a room someone is about to enter
  * into alone. The gift is the empty place, held exactly as it was.
  */
-const SYSTEM = `You turn a memory into a place someone can walk into.
+const SYSTEM = `You turn a memory into a place someone can enter and look around.
 
 Return JSON only, with this exact shape:
 {"worldPrompt": string, "objects": [{"name": string, "prompt": string}]}
@@ -48,14 +48,14 @@ photorealistic 3D scene generator. Rules, in order of importance:
 
 1. NO PEOPLE. No figures, no faces, no hands, nobody standing or sitting.
    The place is empty and still, as if everyone stepped out a moment ago.
-   This matters more than anything else: someone will walk through it alone.
+   This matters more than anything else: someone will enter it alone.
 2. One place, one time of day, one light source described plainly.
 3. Give it depth - something near, something far, a doorway or window. Flat
    walls make a dull room to stand in.
 4. Concrete and sensory, not sentimental. Name materials, colours, wear.
-5. Keep the arrival area and a short walking loop clear. Put no large object,
-   wall, railing, foliage, fog, mirror, or reflective surface close to the
-   viewpoint. Major floors, walls and horizons must be continuous and plain.
+5. Keep the arrival viewpoint and nearby area clear. Put no large object, wall,
+   railing, foliage, fog, mirror, or reflective surface close to the camera.
+   Major floors, walls and horizons must be continuous and plain.
 6. Describe enough of the surroundings to make every direction coherent.
 7. 60-90 words. Photographic. No camera directions, no story, no metaphor.
 

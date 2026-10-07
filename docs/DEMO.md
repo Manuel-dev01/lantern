@@ -33,7 +33,7 @@ hook, not a replacement for the required walkthrough.
 |---|---|---|
 | 0:00–0:30 | proposition | landing page; actual hero world behind the sentence |
 | 0:30–1:20 | receiving | threshold card, named recipient, deliberate step inside |
-| 1:20–2:10 | exploring | real walking and looking in the sewing room |
+| 1:20–2:10 | exploring | guided looking in the sewing room from its capture-safe viewpoint |
 | 2:10–2:55 | creating | the three intake prompts; no fabricated submit/result |
 | 2:55–3:35 | progressive world | 100k preview, enhancing label, same-camera full-res swap |
 | 3:35–4:20 | tool synergy | independent Tripo objects inside Marble; normal and labelled collider evidence |

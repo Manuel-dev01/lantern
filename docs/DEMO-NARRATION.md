@@ -12,11 +12,11 @@ their name, and chooses when to step inside. There is no dashboard to understand
 and no account to create. The first experience is simply receiving a place that
 somebody remembered for you.
 
-Beyond the door is a navigable room. This sewing room is built from a written
+Beyond the door is a spatial room. This sewing room is built from a written
 memory, reconstructed as a Gaussian-splat environment, and combined with
 separate three-dimensional objects. It is not a flat panorama. The viewer can
-look around, walk through the space, and inspect the details that make the
-memory personal.
+look around from the capture's verified viewpoint and inspect the details that
+make the memory personal.
 
 Creating one starts on the landing page. Lantern explains the proposition in
 one sentence: build someone the place they remember. The room behind that
@@ -43,15 +43,15 @@ The transition improves detail without making the person begin again.
 
 The generated objects remain independent. Here, the sewing machine, fabric,
 tomato, and small tools sit inside the captured room. Because they are real
-meshes, Lantern can place them, rotate them, and let the viewer approach them.
+meshes, Lantern can place them, rotate them, and let the viewer inspect them.
 Placement is checked against the world's collision geometry so an object rests
 on a supported surface instead of floating, clipping, or hanging over an edge.
 
 Depth is what makes the composite believable. In the normal view, an object can
-disappear behind the table as the camera moves. In this labelled editorial
+disappear behind the table as the view changes. In this labelled editorial
 evidence view, the hidden collider is visible. It is not part of the final
-aesthetic; it shows the geometry Lantern uses for walking, seating objects, and
-occlusion.
+aesthetic; it shows the geometry Lantern uses for supported placement, depth
+occlusion, and walk mode on captures that have passed coverage checks.
 
 The same collision data also keeps the camera grounded. Spawn points are tested
 against the real floor before a gift is published. The viewer should arrive
@@ -74,5 +74,5 @@ payment, or successful generation has been fabricated.
 
 Lantern combines a simple creation flow, progressive spatial loading, grounded
 object placement, and a recipient-first reveal. The result is not just a
-generated image. It is a place they can walk through—and a memory someone can
-choose to give.
+generated image. It is a place they can step inside and look around—and a
+memory someone can choose to give.
